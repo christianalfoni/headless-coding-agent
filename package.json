@@ -1,0 +1,29 @@
+{
+  "name": "claude-code-remote",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "agent": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/cli.js",
+    "dev": "npx tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@codesandbox/sdk": "^2.0.7",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.4",
+    "@ai-sdk/google": "^2.0.6",
+    "@ai-sdk/mistral": "^2.0.5",
+    "@ai-sdk/openai": "^2.0.15",
+    "@ai-sdk/togetherai": "^1.0.7",
+    "@ai-sdk/xai": "^2.0.7",
+    "ai": "^5.0.15",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.76"
+  }
+}
