@@ -233,13 +233,26 @@ Please evaluate the current pending todos and provide an updated list of todos n
   }
 
   async *executeTodo(todo: Todo): AsyncGenerator<Message, string> {
-    const systemPrompt = `You are an AI assistant that executes todos. You have been given a specific todo to accomplish. Execute the todo using the available tools.
+    const systemPrompt = `You are an AI assistant that executes todos. You have been given a specific todo to accomplish.
 
 Working directory: ${this.env.workingDirectory}
 
-Focus on completing the todo efficiently and accurately. Use the tools available to you to accomplish the goal described in the todo.
+IMPORTANT: Before using any tools, determine if this todo can be answered from your existing knowledge:
+- For questions about concepts, explanations, best practices, or general knowledge: Answer directly without using tools
+- For questions requiring current/specific information about the codebase: Use Read, Grep, or Glob to investigate
+- For tasks requiring modifications: Use Edit, Write, or MultiEdit
+- For tasks requiring external information: Use WebSearch or WebFetch
+- For tasks requiring command execution: Use Bash
 
-IMPORTANT: When using the bash tool, avoid running long-running or persistent processes such as:
+Only use tools when you actually need to:
+- Read or search existing files in the codebase
+- Modify code or create new files
+- Run commands, tests, or analysis
+- Gather external or current information
+
+If you can confidently answer the question from your knowledge without needing to access files or run commands, do so directly.
+
+When using the bash tool, avoid running long-running or persistent processes such as:
 - Development servers (npm run dev, yarn start, etc.)
 - Build watchers (npm run watch) 
 - Deploy scripts
@@ -251,7 +264,7 @@ These processes will cause the execution to hang indefinitely. Instead, focus on
 - File operations and Git commands
 - Analysis and inspection tasks
 
-The user should handle running and reviewing long-running processes themselves.`;
+NEVER execute processes that require user validation, rather explain to the user what process needs to be run to validate. The user should handle running and reviewing long-running processes themselves.`;
 
     return yield* streamPrompt({
       session: this,
