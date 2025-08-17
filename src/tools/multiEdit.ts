@@ -1,50 +1,69 @@
-import { tool } from 'ai';
-import { z } from 'zod';
-import { exec } from "child_process";
-import { promisify } from "util";
+import { tool } from "ai";
+import { z } from "zod";
+import * as fs from "fs/promises";
 import * as os from "os";
 
-const execAsync = promisify(exec);
-
-const inputSchema = z.object({
-  sedCommands: z.array(z.string()).describe("Array of sed command arguments to execute sequentially")
+const Edit = z.object({
+  find: z.string().min(1).describe("Literal text to search for (exact match)"),
+  replace: z
+    .string()
+    .default("")
+    .describe("Replacement text (inserted literally)"),
+  replaceAll: z
+    .boolean()
+    .default(true)
+    .describe("If false, only first occurrence is replaced"),
 });
 
+const inputSchema = z.object({
+  file: z.string().describe("Path to the target file"),
+  edits: z.array(Edit).min(1),
+});
+
+function replaceFirst(hay: string, needle: string, repl: string) {
+  const i = hay.indexOf(needle);
+  if (i === -1) return null;
+  return hay.slice(0, i) + repl + hay.slice(i + needle.length);
+}
+
+function replaceAll(hay: string, needle: string, repl: string) {
+  return hay.split(needle).join(repl);
+}
+
 export const MultiEdit = tool({
-  description: `Execute multiple sed commands sequentially for batch file editing. Running on ${os.platform()}.`,
+  description: `Atomic, literal multi-edit for a single file (UTF-8, strict). Running on ${os.platform()}.`,
   inputSchema: inputSchema as any,
-  execute: async (params: any) => {
-    const commands = params.sedCommands;
-    const results = [];
+  execute: async (params: z.infer<typeof inputSchema>) => {
+    const { file, edits } = params;
 
-    for (let i = 0; i < commands.length; i++) {
-      const args = commands[i];
-      const command = args ? `sed ${args}` : `sed`;
+    // Read file
+    const before = await fs.readFile(file, "utf8");
 
-      const { stderr } = await execAsync(command);
-      
-      results.push({
-        command: command,
-        stderr: stderr?.toString() || undefined,
-        index: i
-      });
+    // Apply edits in memory
+    let content = before;
+    for (let i = 0; i < edits.length; i++) {
+      const { find, replace, replaceAll: all } = edits[i];
 
-      // If any command fails, stop execution
-      if (stderr) {
-        break;
+      if (!content.includes(find)) {
+        throw new Error(`Edit[${i}]: 'find' not present in file`);
+      }
+
+      if (all) {
+        content = replaceAll(content, find, replace);
+      } else {
+        const next = replaceFirst(content, find, replace);
+        if (next == null) {
+          throw new Error(`Edit[${i}]: 'find' not present in file`);
+        }
+        content = next;
       }
     }
 
-    const completedCount = results.length;
-    const allSuccessful = results.every(r => !r.stderr);
+    // Only write if changed
+    if (content !== before) {
+      await fs.writeFile(file, content, "utf8");
+    }
 
-    return {
-      output: allSuccessful 
-        ? `All ${completedCount} edit commands completed successfully`
-        : `Completed ${completedCount}/${commands.length} edit commands`,
-      results: results,
-      completedCommands: completedCount,
-      totalCommands: commands.length
-    };
-  }
+    return { ok: true };
+  },
 });

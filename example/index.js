@@ -35,23 +35,27 @@ class AgentChat {
         return chalk.white('💬 ') + part.text;
       
       case 'reasoning':
-        return chalk.yellow('🧠 ') + chalk.yellow(part.reasoning);
+        return chalk.yellow('🧠 ') + chalk.yellow(part.text);
       
       case 'tool-call':
-        return chalk.blue('🔧 ') + chalk.blue.bold(part.toolName) + 
-               (part.parameters ? chalk.gray(` ${JSON.stringify(part.parameters, null, 2)}`) : '');
+        let toolDescription = chalk.blue.bold(part.toolName);
+        if (part.toolName === 'Edit') {
+          toolDescription += chalk.gray(` (${part.args.file}: "${part.args.find}" → "${part.args.replace}")`);
+        } else if (part.toolName === 'MultiEdit') {
+          toolDescription += chalk.gray(` (${part.args.file}: ${part.args.edits.length} edits)`);
+        }
+        return chalk.blue('🔧 ') + toolDescription;
       
       case 'tool-result':
-        const isError = part.isError;
-        const prefix = isError ? chalk.red('❌ ') : chalk.green('✅ ');
-        const content = typeof part.output === 'string' ? 
-          part.output : JSON.stringify(part.output, null, 2);
-        
-        // Truncate very long outputs
-        const truncated = content.length > 500 ? 
-          content.substring(0, 500) + chalk.gray('... (truncated)') : content;
-        
-        return prefix + chalk.gray(truncated);
+        let resultMessage = `${part.toolName} completed`;
+        if (part.toolName === 'Edit' || part.toolName === 'MultiEdit') {
+          resultMessage += part.result.ok ? ' successfully' : ' with errors';
+        }
+        return chalk.green('✅ ') + chalk.gray(resultMessage);
+      
+      case 'tool-error':
+        return chalk.red('❌ ') + chalk.red.bold(part.toolName) + 
+               chalk.red(`: ${part.error}`);
       
       case 'todos':
         if (part.todos && part.todos.length > 0) {
@@ -66,8 +70,16 @@ class AgentChat {
         return '';
       
       case 'completed':
-        return chalk.green.bold('✨ Agent session completed!') +
-               chalk.gray(` (${part.stepCount} steps, ${part.durationMs}ms)`);
+        this.lastTodos = part.todos; // Save completed todos
+        return ''; // Don't show completion message
+      
+      case 'finish':
+        return chalk.blue('🏁 ') + chalk.blue('Child session finished') +
+               chalk.gray(` (${part.inputTokens} input, ${part.outputTokens} output tokens)`);
+      
+      case 'error':
+        return chalk.red('💥 ') + chalk.red.bold('Session Error: ') + 
+               chalk.red(part.error);
       
       default:
         return chalk.gray('📝 ') + JSON.stringify(part, null, 2);
@@ -108,6 +120,7 @@ class AgentChat {
         const formatted = this.formatAgentOutput(part);
         if (formatted) {
           console.log(formatted);
+          console.log(); // Add line break between messages
         }
       }
 

@@ -46,7 +46,12 @@ export type EditToolCallMessage = {
   type: "tool-call";
   toolCallId: string;
   toolName: "Edit";
-  args: { sedArguments: string };
+  args: { 
+    file: string; 
+    find: string; 
+    replace: string; 
+    replaceAll: boolean; 
+  };
 } & SessionInfo;
 
 export type WriteToolCallMessage = {
@@ -81,7 +86,14 @@ export type MultiEditToolCallMessage = {
   type: "tool-call";
   toolCallId: string;
   toolName: "MultiEdit";
-  args: { sedCommands: string[] };
+  args: { 
+    file: string; 
+    edits: Array<{
+      find: string;
+      replace: string;
+      replaceAll: boolean;
+    }>;
+  };
 } & SessionInfo;
 
 export type WebFetchToolCallMessage = {
@@ -128,7 +140,7 @@ export type EditToolResultMessage = {
   type: "tool-result";
   toolCallId: string;
   toolName: "Edit";
-  result: { output: string; stderr?: string };
+  result: { ok: boolean };
 } & SessionInfo;
 
 export type WriteToolResultMessage = {
@@ -163,12 +175,7 @@ export type MultiEditToolResultMessage = {
   type: "tool-result";
   toolCallId: string;
   toolName: "MultiEdit";
-  result: {
-    output: string;
-    results: Array<{ command: string; stderr?: string; index: number }>;
-    completedCommands: number;
-    totalCommands: number;
-  };
+  result: { ok: boolean };
 } & SessionInfo;
 
 export type WebFetchToolResultMessage = {

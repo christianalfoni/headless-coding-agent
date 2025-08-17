@@ -398,36 +398,27 @@ Tool execution results. The `result` field structure varies by tool:
 }
 ```
 
-**Edit** - Edit files with sed:
+**Edit** - Edit files with literal text replacement:
 ```json
 {
   "type": "tool-result",
   "toolCallId": "call_jkl012",
   "toolName": "Edit", 
   "result": {
-    "output": "Edit completed successfully",
-    "success": true,
-    "stderr": undefined
+    "ok": true
   },
   "sessionId": "uuid-1234"
 }
 ```
 
-**MultiEdit** - Batch file edits:
+**MultiEdit** - Batch file edits with literal text replacement:
 ```json
 {
   "type": "tool-result",
   "toolCallId": "call_mno345",
   "toolName": "MultiEdit",
   "result": {
-    "output": "All 3 edit commands completed successfully", 
-    "success": true,
-    "results": [
-      {"command": "sed ...", "success": true, "index": 0},
-      {"command": "sed ...", "success": true, "index": 1}
-    ],
-    "completedCommands": 3,
-    "totalCommands": 3
+    "ok": true
   },
   "sessionId": "uuid-1234"
 }
@@ -697,8 +688,8 @@ Defaults to `anthropic/claude-3-5-sonnet-20241022` but supports multiple AI prov
 
 - **Bash**: Execute shell commands with timeout protection
 - **Read**: Read file contents with line range support
-- **Edit**: Make targeted text replacements in files
-- **MultiEdit**: Perform multiple edits in a single operation
+- **Edit**: Make literal text replacements in files
+- **MultiEdit**: Perform multiple literal text replacements in a single operation
 - **Glob**: Find files using glob patterns
 - **Grep**: Search file contents with regex
 - **Ls**: List directory contents
