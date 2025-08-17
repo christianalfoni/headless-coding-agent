@@ -78,7 +78,7 @@ export class Session {
     this.todos = initialTodos ? initialTodos.map(todo => ({
       description: todo.description,
       status: (todo.status || "pending") as "pending" | "in_progress" | "completed",
-      textOutput: undefined
+      summary: undefined
     })) : [];
     this.env = env;
     this.parentSession = parentSession;
@@ -125,9 +125,9 @@ export class Session {
     if (this.todos.length > 1) {
       yield* this.delegateTodos();
     } else if (this.todos[0]) {
-      const textOutput = yield* this.executeTodo(this.todos[0]);
+      const summary = yield* this.executeTodo(this.todos[0]);
       this.todos[0].status = "completed";
-      this.todos[0].textOutput = textOutput;
+      this.todos[0].summary = summary;
     }
     console.log("Executed todos", this.todos);
     return yield* this.summarizeTodos();
@@ -145,7 +145,7 @@ export class Session {
             .map(
               (todo, index) =>
                 `${index + 1}. ${todo.description}${
-                  todo.textOutput ? `\n   Result: ${todo.textOutput}` : ""
+                  todo.summary ? `\n   Result: ${todo.summary}` : ""
                 }`
             )
             .join("\n")}`
@@ -252,7 +252,7 @@ The user should handle running and reviewing long-running processes themselves.`
 
       // Mark todo as completed
       pendingTodo.status = "completed";
-      pendingTodo.textOutput = text;
+      pendingTodo.summary = text;
 
       yield* this.evaluateTodos();
     }
@@ -264,7 +264,7 @@ The user should handle running and reviewing long-running processes themselves.`
       .map(
         (todo, index) =>
           `${index + 1}. ${todo.description}${
-            todo.textOutput ? `\n   Result: ${todo.textOutput}` : ""
+            todo.summary ? `\n   Result: ${todo.summary}` : ""
           }`
       )
       .join("\n");

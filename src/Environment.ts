@@ -6,11 +6,11 @@ export class SessionEnvironment {
   public model: ReturnType<typeof createModel>;
   public maxSteps?: number;
 
-  constructor(workingDirectory: string, gitStatus?: unknown, maxSteps?: number) {
+  constructor(workingDirectory: string, gitStatus?: unknown, maxSteps?: number, modelId?: string) {
     this.workingDirectory = workingDirectory;
     this.gitStatus = gitStatus;
     this.maxSteps = maxSteps;
-    this.model = createModel();
+    this.model = createModel(modelId);
   }
 
   refresh(): void {

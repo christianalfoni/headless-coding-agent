@@ -56,5 +56,5 @@ export interface Session {
 export interface Todo {
   description: string;
   status: "pending" | "in_progress" | "completed";
-  textOutput?: string;
+  summary?: string;
 }
