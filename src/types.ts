@@ -11,7 +11,7 @@ export type CustomStreamPart =
   | { type: 'text'; text: string; finishReason?: string }
   | { type: 'reasoning'; reasoning: string; finishReason?: string }
   | { type: 'todos'; todos: Todo[]; finishReason?: string }
-  | { type: 'completed'; inputTokens: number; outputTokens: number; stepCount: number; durationMs: number };
+  | { type: 'completed'; inputTokens: number; outputTokens: number; stepCount: number; durationMs: number; todos?: Todo[] };
 
 // Pass-through stream parts (everything except text/reasoning start, deltas and ends, and control events)
 export type PassThroughStreamPart<TOOLS extends ToolSet = ToolSet> = Exclude<

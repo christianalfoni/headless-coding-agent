@@ -126,6 +126,7 @@ export async function* streamPrompt(config: {
             outputTokens: config.session.outputTokens,
             stepCount: config.session.stepCount,
             durationMs,
+            todos: config.session.todos,
             ...sessionInfo,
           };
           yield completedPart;

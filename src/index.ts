@@ -5,6 +5,7 @@ export interface QueryOptions {
   prompt: string;
   workingDirectory: string;
   maxSteps?: number;
+  initialTodos?: { description: string; status?: "pending" | "in_progress" | "completed" }[];
 }
 
 export async function* query(options: QueryOptions) {
@@ -13,5 +14,5 @@ export async function* query(options: QueryOptions) {
     undefined,
     options.maxSteps
   );
-  return yield* Session.create(options.prompt, context);
+  return yield* Session.create(options.prompt, context, undefined, options.initialTodos);
 }

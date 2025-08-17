@@ -2,7 +2,6 @@ import { tool } from "ai";
 import { z } from "zod";
 
 const todoSchema = z.object({
-  id: z.string(),
   description: z.string(),
 });
 
@@ -18,7 +17,6 @@ export const writeTodosTool = tool({
   inputSchema: inputSchema as any,
   execute: async (input: {
     todos: {
-      id: string;
       description: string;
     }[];
   }) => {

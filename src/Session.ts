@@ -50,9 +50,10 @@ export class Session {
   static async *create(
     userPrompt: string,
     env: SessionEnvironment,
-    parentSession?: Session
+    parentSession?: Session,
+    initialTodos?: { description: string; status?: "pending" | "in_progress" | "completed" }[]
   ) {
-    const session = new Session(userPrompt, env, parentSession);
+    const session = new Session(userPrompt, env, parentSession, initialTodos);
 
     return yield* session.exec();
   }
@@ -69,11 +70,16 @@ export class Session {
   constructor(
     userPrompt: string,
     env: SessionEnvironment,
-    parentSession?: Session
+    parentSession?: Session,
+    initialTodos?: { description: string; status?: "pending" | "in_progress" | "completed" }[]
   ) {
     this.sessionId = uuidv4();
     this.userPrompt = userPrompt;
-    this.todos = [];
+    this.todos = initialTodos ? initialTodos.map(todo => ({
+      description: todo.description,
+      status: (todo.status || "pending") as "pending" | "in_progress" | "completed",
+      textOutput: undefined
+    })) : [];
     this.env = env;
     this.parentSession = parentSession;
     this.inputTokens = 0;
@@ -191,7 +197,21 @@ Please evaluate the current pending todos and provide an updated list of todos n
 
 Working directory: ${this.env.workingDirectory}
 
-Focus on completing the todo efficiently and accurately. Use the tools available to you to accomplish the goal described in the todo.`;
+Focus on completing the todo efficiently and accurately. Use the tools available to you to accomplish the goal described in the todo.
+
+IMPORTANT: When using the bash tool, avoid running long-running or persistent processes such as:
+- Development servers (npm run dev, yarn start, etc.)
+- Build watchers (npm run watch) 
+- Deploy scripts
+- Any process that doesn't terminate quickly
+
+These processes will cause the execution to hang indefinitely. Instead, focus on tasks like:
+- Running tests, linters, and type checkers
+- One-time builds
+- File operations and Git commands
+- Analysis and inspection tasks
+
+The user should handle running and reviewing long-running processes themselves.`;
 
     return yield* streamPrompt({
       session: this,
