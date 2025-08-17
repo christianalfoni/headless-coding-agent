@@ -78,8 +78,7 @@ async function main() {
       workingDirectory: process.cwd(),
       maxSteps,
       model,
-      todos: initialTodos,
-      stdout: true
+      todos: initialTodos
     });
     
     for await (const part of stream) {

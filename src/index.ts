@@ -11,7 +11,6 @@ export interface QueryOptions {
   maxSteps?: number;
   model?: string;
   todos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[];
-  stdout?: boolean;
 }
 
 export async function* query(options: QueryOptions) {
@@ -19,8 +18,12 @@ export async function* query(options: QueryOptions) {
     options.workingDirectory,
     undefined,
     options.maxSteps ?? 50,
-    options.model,
-    options.stdout || false
+    options.model
   );
   return yield* Session.create(options.prompt, context, undefined, options.todos);
 }
+
+// Re-export all types for SDK usage
+export * from './types';
+export { Session } from './Session';
+export { SessionEnvironment } from './Environment';
