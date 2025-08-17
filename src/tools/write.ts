@@ -9,30 +9,21 @@ const inputSchema = z.object({
   content: z.string().describe("Content to write to the file")
 });
 
-export const writeTool = tool({
+export const Write = tool({
   description: "Write content to a file",
   inputSchema: inputSchema as any,
   execute: async (params: any) => {
     const { filePath, content } = params;
 
-    try {
-      // Ensure directory exists
-      const dir = dirname(filePath);
-      await mkdir(dir, { recursive: true });
-      
-      // Write the file
-      await writeFile(filePath, content, 'utf8');
-      
-      return {
-        output: `Successfully wrote to ${filePath}`,
-        success: true,
-      };
-    } catch (error: any) {
-      return {
-        output: error.message || "Write failed",
-        success: false,
-        error: error.message,
-      };
-    }
+    // Ensure directory exists
+    const dir = dirname(filePath);
+    await mkdir(dir, { recursive: true });
+    
+    // Write the file
+    await writeFile(filePath, content, 'utf8');
+    
+    return {
+      output: `Successfully wrote to ${filePath}`,
+    };
   }
 });

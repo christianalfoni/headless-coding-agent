@@ -9,7 +9,7 @@ const inputSchema = z.object({
   globArguments: z.string().describe("Arguments and flags for find command (used for glob patterns)")
 });
 
-export const globTool = tool({
+export const Glob = tool({
   description: 'Find files using glob patterns with find command',
   inputSchema: inputSchema as any,
   execute: async (params: any) => {
@@ -17,20 +17,11 @@ export const globTool = tool({
     // Use find command for glob-like functionality
     const command = args ? `find ${args}` : `find .`;
 
-    try {
-      const { stdout, stderr } = await execAsync(command);
-      
-      return {
-        output: stdout?.toString() || "",
-        success: !stderr,
-        stderr: stderr?.toString() || undefined,
-      };
-    } catch (error: any) {
-      return {
-        output: error.message || "Command failed",
-        success: false,
-        error: error.message,
-      };
-    }
+    const { stdout, stderr } = await execAsync(command);
+    
+    return {
+      output: stdout?.toString() || "",
+      stderr: stderr?.toString() || undefined,
+    };
   }
 });

@@ -101,10 +101,10 @@ export async function* streamPrompt(config: {
         const toolCallPart: Message = {
           type: "tool-call",
           toolCallId: part.toolCallId,
-          toolName: part.toolName,
+          toolName: part.toolName as any,
           args: part.input,
           ...sessionInfo,
-        };
+        } as any;
         yield toolCallPart;
         continue;
       }
@@ -123,11 +123,24 @@ export async function* streamPrompt(config: {
         const toolResultPart: Message = {
           type: "tool-result",
           toolCallId: part.toolCallId,
-          toolName: part.toolName,
+          toolName: part.toolName as any,
           result: part.output,
           ...sessionInfo,
-        };
+        } as any;
         yield toolResultPart;
+        continue;
+      }
+
+      // Handle tool errors
+      if (part.type === "tool-error") {
+        const toolErrorPart: Message = {
+          type: "tool-error",
+          toolCallId: part.toolCallId,
+          toolName: part.toolName as any,
+          error: part.error instanceof Error ? part.error.message : String(part.error),
+          ...sessionInfo,
+        } as any;
+        yield toolErrorPart;
         continue;
       }
 
@@ -159,7 +172,6 @@ export async function* streamPrompt(config: {
           type: "finish",
           inputTokens: part.totalUsage.inputTokens || 0,
           outputTokens: part.totalUsage.outputTokens || 0,
-          finishReason: part.finishReason,
           ...sessionInfo,
         };
         yield finishPart;

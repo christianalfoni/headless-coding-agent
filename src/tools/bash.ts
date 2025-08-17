@@ -10,7 +10,7 @@ const inputSchema = z.object({
   bashCommand: z.string().describe("The complete command to execute in bash shell")
 });
 
-export const bashTool = tool({
+export const Bash = tool({
   description: `Execute commands in a bash shell. Input should be the full command to run (e.g., 'head -n 1 file.txt', 'ls -la', 'grep pattern file'). 
 
 IMPORTANT: This tool should NOT be used for long-running or persistent processes such as:
@@ -32,21 +32,12 @@ Running on ${os.platform()}.`,
     const args = params.bashCommand;
     const command = args || `bash`;
 
-    try {
-      const options: any = {};
+    const options: any = {};
+    const { stdout, stderr } = await execAsync(command, options);
 
-      const { stdout, stderr } = await execAsync(command, options);
-
-      return {
-        stdout: stdout?.toString() || stderr?.toString() || "",
-        success: !stderr,
-        stderr: stderr?.toString() || undefined,
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
+    return {
+      stdout: stdout?.toString() || stderr?.toString() || "",
+      stderr: stderr?.toString() || undefined,
+    };
   },
 });

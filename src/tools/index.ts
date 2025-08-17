@@ -2,12 +2,12 @@
 export * from "./schemas";
 
 // Export all tools
-export { bashTool } from "./bash";
-export { editTool } from "./edit";
-export { multiEditTool } from "./multiEdit";
-export { globTool } from "./glob";
-export { grepTool } from "./grep";
-export { lsTool } from "./ls";
-export { readTool } from "./read";
-export { writeTool } from "./write";
-export { writeTodosTool } from "./todos";
+export { Bash } from "./bash";
+export { Edit } from "./edit";
+export { MultiEdit } from "./multiEdit";
+export { Glob } from "./glob";
+export { Grep } from "./grep";
+export { Ls } from "./ls";
+export { Read } from "./read";
+export { Write } from "./write";
+export { WriteTodos } from "./todos";

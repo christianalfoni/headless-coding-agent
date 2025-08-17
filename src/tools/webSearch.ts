@@ -23,7 +23,7 @@ const inputSchema = z.object({
   safesearch: z.number().optional().describe("0 off, 1 moderate, 2 strict"),
 }) as any;
 
-export const webSearch = tool({
+export const WebSearch = tool({
   description:
     "Developer-focused web search via public SearXNG instances (JSON).",
   inputSchema,

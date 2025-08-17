@@ -253,7 +253,7 @@ Used in `Session.executeTodo()`:
 - **Purpose**: Execute a specific todo using available tools
 - **Context**: Working directory, specific todo description
 - **Behavior**: Focus on efficient task completion, avoid long-running processes
-- **Tool Access**: All tools (bash, read, edit, glob, grep, ls, write, multiEdit, webFetch, webSearch)
+- **Tool Access**: All tools (bash, read, edit, glob, grep, ls, write, multiEdit, WebFetch, WebSearch)
 
 ### Summarization Prompt
 
@@ -283,6 +283,7 @@ type Message =
   | CompletedMessage
   | ToolCallMessage
   | ToolResultMessage
+  | ToolErrorMessage
   | ErrorMessage
   | FinishMessage;
 ```
@@ -298,8 +299,7 @@ AI-generated text output:
   "type": "text",
   "text": "I'm analyzing your TypeScript configuration...",
   "sessionId": "uuid-1234",
-  "parentSessionId": "uuid-parent",
-  "finishReason": "stop"
+  "parentSessionId": "uuid-parent"
 }
 ```
 
@@ -311,8 +311,7 @@ AI's internal reasoning process:
 {
   "type": "reasoning",
   "text": "The user wants me to fix errors. I should start by running a type check.",
-  "sessionId": "uuid-1234",
-  "finishReason": "continue"
+  "sessionId": "uuid-1234"
 }
 ```
 
@@ -342,7 +341,7 @@ Tool execution initiation:
 {
   "type": "tool-call",
   "toolCallId": "call_abc123",
-  "toolName": "bashTool",
+  "toolName": "Bash",
   "args": {
     "command": "npm run typecheck",
     "description": "Check for type errors"
@@ -353,21 +352,203 @@ Tool execution initiation:
 
 #### ToolResultMessage
 
-Tool execution results:
+Tool execution results. The `result` field structure varies by tool:
 
+**Bash** - Execute shell commands:
 ```json
 {
   "type": "tool-result",
   "toolCallId": "call_abc123",
-  "toolName": "bashTool",
+  "toolName": "Bash",
   "result": {
     "stdout": "Found 3 errors in 2 files",
-    "exitCode": 1
+    "success": false,
+    "stderr": "TypeScript error messages"
   },
-  "sessionId": "uuid-1234",
-  "finishReason": "stop"
+  "sessionId": "uuid-1234"
 }
 ```
+
+**Read** - Read file contents:
+```json
+{
+  "type": "tool-result", 
+  "toolCallId": "call_def456",
+  "toolName": "Read",
+  "result": {
+    "output": "file contents here...",
+    "success": true,
+    "stderr": undefined
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**Write** - Write files:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_ghi789", 
+  "toolName": "Write",
+  "result": {
+    "output": "Successfully wrote to /path/to/file.txt",
+    "success": true
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**Edit** - Edit files with sed:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_jkl012",
+  "toolName": "Edit", 
+  "result": {
+    "output": "Edit completed successfully",
+    "success": true,
+    "stderr": undefined
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**MultiEdit** - Batch file edits:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_mno345",
+  "toolName": "MultiEdit",
+  "result": {
+    "output": "All 3 edit commands completed successfully", 
+    "success": true,
+    "results": [
+      {"command": "sed ...", "success": true, "index": 0},
+      {"command": "sed ...", "success": true, "index": 1}
+    ],
+    "completedCommands": 3,
+    "totalCommands": 3
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**Glob** - Find files with patterns:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_pqr678",
+  "toolName": "Glob",
+  "result": {
+    "output": "./src/file1.ts\n./src/file2.ts",
+    "success": true,
+    "stderr": undefined
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**Grep** - Search file contents:
+```json
+{
+  "type": "tool-result", 
+  "toolCallId": "call_stu901",
+  "toolName": "Grep",
+  "result": {
+    "output": "src/file.ts:10:function searchTerm() {",
+    "success": true,
+    "stderr": undefined
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**Ls** - List directories:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_vwx234", 
+  "toolName": "Ls",
+  "result": {
+    "output": "file1.txt\nfile2.txt\nsubdir/",
+    "success": true,
+    "stderr": undefined
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**WebFetch** - Fetch web content:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_yzab567",
+  "toolName": "WebFetch", 
+  "result": {
+    "url": "https://example.com/page",
+    "status": 200,
+    "mime": "text/html",
+    "title": "Page Title", 
+    "text": "Main content extracted...",
+    "bytes": 4096,
+    "wasTruncated": false
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+**WebSearch** - Search the web:
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_cdef890",
+  "toolName": "WebSearch",
+  "result": [
+    {
+      "title": "Search Result Title",
+      "url": "https://example.com/result", 
+      "snippet": "Search result description...",
+      "engine": "duckduckgo"
+    }
+  ],
+  "sessionId": "uuid-1234"
+}
+```
+
+**WriteTodos** - Manage todos (evaluation phase only):
+```json
+{
+  "type": "tool-result", 
+  "toolCallId": "call_ghij123",
+  "toolName": "WriteTodos",
+  "result": {
+    "success": true,
+    "todos": [
+      {
+        "description": "Fix TypeScript errors",
+        "context": "Build process failing due to type issues"
+      }
+    ]
+  },
+  "sessionId": "uuid-1234"
+}
+```
+
+#### ToolErrorMessage
+
+Tool execution errors. Emitted when a tool fails during execution:
+
+```json
+{
+  "type": "tool-error",
+  "toolCallId": "call_abc123",
+  "toolName": "Bash", 
+  "error": "Command failed: npm run typecheck - exit code 1",
+  "sessionId": "uuid-1234"
+}
+```
+
+The error handling system automatically catches exceptions thrown by tools and converts them into `ToolErrorMessage` events. Tools no longer need to implement their own error handling - all errors are caught and reported through this unified message type.
 
 #### CompletedMessage
 
@@ -401,7 +582,6 @@ Child session completion:
   "type": "finish",
   "inputTokens": 320,
   "outputTokens": 180,
-  "finishReason": "stop",
   "sessionId": "uuid-child",
   "parentSessionId": "uuid-1234"
 }
@@ -515,14 +695,14 @@ Defaults to `anthropic/claude-3-5-sonnet-20241022` but supports multiple AI prov
 
 ## Available Tools
 
-- **bashTool**: Execute shell commands with timeout protection
-- **readTool**: Read file contents with line range support
-- **editTool**: Make targeted text replacements in files
-- **multiEditTool**: Perform multiple edits in a single operation
-- **globTool**: Find files using glob patterns
-- **grepTool**: Search file contents with regex
-- **lsTool**: List directory contents
-- **writeTool**: Create or overwrite files
-- **webFetch**: Fetch and analyze web content
-- **webSearch**: Search the web for information
-- **writeTodosTool**: Manage todo lists (evaluation phase only)
+- **Bash**: Execute shell commands with timeout protection
+- **Read**: Read file contents with line range support
+- **Edit**: Make targeted text replacements in files
+- **MultiEdit**: Perform multiple edits in a single operation
+- **Glob**: Find files using glob patterns
+- **Grep**: Search file contents with regex
+- **Ls**: List directory contents
+- **Write**: Create or overwrite files
+- **WebFetch**: Fetch and analyze web content
+- **WebSearch**: Search the web for information
+- **WriteTodos**: Manage todo lists (evaluation phase only)

@@ -10,62 +10,41 @@ const inputSchema = z.object({
   sedCommands: z.array(z.string()).describe("Array of sed command arguments to execute sequentially")
 });
 
-export const multiEditTool = tool({
+export const MultiEdit = tool({
   description: `Execute multiple sed commands sequentially for batch file editing. Running on ${os.platform()}.`,
   inputSchema: inputSchema as any,
   execute: async (params: any) => {
     const commands = params.sedCommands;
     const results = [];
 
-    try {
-      for (let i = 0; i < commands.length; i++) {
-        const args = commands[i];
-        const command = args ? `sed ${args}` : `sed`;
+    for (let i = 0; i < commands.length; i++) {
+      const args = commands[i];
+      const command = args ? `sed ${args}` : `sed`;
 
-        try {
-          const { stderr } = await execAsync(command);
-          
-          results.push({
-            command: command,
-            success: !stderr,
-            stderr: stderr?.toString() || undefined,
-            index: i
-          });
+      const { stderr } = await execAsync(command);
+      
+      results.push({
+        command: command,
+        stderr: stderr?.toString() || undefined,
+        index: i
+      });
 
-          // If any command fails, stop execution
-          if (stderr) {
-            break;
-          }
-        } catch (error: any) {
-          results.push({
-            command: command,
-            success: false,
-            error: error.message,
-            index: i
-          });
-          break;
-        }
+      // If any command fails, stop execution
+      if (stderr) {
+        break;
       }
-
-      const allSuccessful = results.every(r => r.success);
-      const completedCount = results.length;
-
-      return {
-        output: allSuccessful 
-          ? `All ${completedCount} edit commands completed successfully`
-          : `Completed ${completedCount}/${commands.length} edit commands`,
-        success: allSuccessful,
-        results: results,
-        completedCommands: completedCount,
-        totalCommands: commands.length
-      };
-    } catch (error: any) {
-      return {
-        output: error.message || "Multi-edit failed",
-        success: false,
-        error: error.message,
-        results: results
-      };
     }
+
+    const completedCount = results.length;
+    const allSuccessful = results.every(r => !r.stderr);
+
+    return {
+      output: allSuccessful 
+        ? `All ${completedCount} edit commands completed successfully`
+        : `Completed ${completedCount}/${commands.length} edit commands`,
+      results: results,
+      completedCommands: completedCount,
+      totalCommands: commands.length
+    };
   }
 });

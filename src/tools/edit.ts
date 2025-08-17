@@ -10,27 +10,18 @@ const inputSchema = z.object({
   sedArguments: z.string().describe("Arguments and flags for the sed command")
 });
 
-export const editTool = tool({
+export const Edit = tool({
   description: `Edit files using sed command. Running on ${os.platform()}.`,
   inputSchema: inputSchema as any,
   execute: async (params: any) => {
     const args = params.sedArguments;
     const command = args ? `sed ${args}` : `sed`;
 
-    try {
-      const { stderr } = await execAsync(command);
-      
-      return {
-        output: stderr ? stderr.toString() : "Edit completed successfully",
-        success: !stderr,
-        stderr: stderr?.toString() || undefined,
-      };
-    } catch (error: any) {
-      return {
-        output: error.message || "Command failed",
-        success: false,
-        error: error.message,
-      };
-    }
+    const { stderr } = await execAsync(command);
+    
+    return {
+      output: stderr ? stderr.toString() : "Edit completed successfully",
+      stderr: stderr?.toString() || undefined,
+    };
   }
 });

@@ -2,17 +2,17 @@ import { v4 as uuidv4 } from "uuid";
 import { Todo, Message } from "./types";
 import { SessionEnvironment } from "./Environment";
 import { streamPrompt } from "./prompt";
-import { writeTodosTool } from "./tools/todos";
-import { readTool } from "./tools/read";
-import { bashTool } from "./tools/bash";
-import { editTool } from "./tools/edit";
-import { globTool } from "./tools/glob";
-import { grepTool } from "./tools/grep";
-import { lsTool } from "./tools/ls";
-import { writeTool } from "./tools/write";
-import { multiEditTool } from "./tools/multiEdit";
-import { webFetch } from "./tools/webFetch";
-import { webSearch } from "./tools/webSearch";
+import { WriteTodos } from "./tools/todos";
+import { Read } from "./tools/read";
+import { Bash } from "./tools/bash";
+import { Edit } from "./tools/edit";
+import { Glob } from "./tools/glob";
+import { Grep } from "./tools/grep";
+import { Ls } from "./tools/ls";
+import { Write } from "./tools/write";
+import { MultiEdit } from "./tools/multiEdit";
+import { WebFetch } from "./tools/webFetch";
+import { WebSearch } from "./tools/webSearch";
 
 const getSystemPrompt = (
   workingDirectory: string
@@ -176,7 +176,7 @@ Please evaluate the current pending todos and provide an updated list of todos n
       system: getSystemPrompt(this.env.workingDirectory),
       prompt,
       tools: {
-        WriteTodos: writeTodosTool as any,
+        WriteTodos: WriteTodos as any,
       },
       toolChoice: "required",
     });
@@ -230,16 +230,16 @@ The user should handle running and reviewing long-running processes themselves.`
       system: systemPrompt,
       prompt: todo.description,
       tools: {
-        readTool,
-        bashTool,
-        editTool,
-        globTool,
-        grepTool,
-        lsTool,
-        writeTool,
-        multiEditTool,
-        webFetch,
-        webSearch,
+        Read,
+        Bash,
+        Edit,
+        Glob,
+        Grep,
+        Ls,
+        Write,
+        MultiEdit,
+        WebFetch,
+        WebSearch,
       },
       toolChoice: "auto",
       maxSteps: this.getMaxSteps(),
