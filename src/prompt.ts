@@ -1,5 +1,5 @@
 import { streamText, Tool, stepCountIs } from "ai";
-import { Session, SessionStreamPart } from "./types";
+import { Session, Message } from "./types";
 
 export async function* streamPrompt(config: {
   session: Session;
@@ -8,7 +8,7 @@ export async function* streamPrompt(config: {
   tools: Record<string, Tool>;
   toolChoice: "auto" | "required";
   maxSteps?: number;
-}): AsyncGenerator<SessionStreamPart<any>> {
+}): AsyncGenerator<Message> {
   try {
     const result = await streamText({
       model: config.session.env.model,
@@ -56,7 +56,7 @@ export async function* streamPrompt(config: {
 
       if (part.type === "text-end") {
         // Yield custom text message with complete buffered text
-        const textPart: SessionStreamPart<any> = {
+        const textPart: Message = {
           type: "text",
           text: textBuffer,
           ...sessionInfo,
@@ -80,9 +80,9 @@ export async function* streamPrompt(config: {
 
       if (part.type === "reasoning-end") {
         // Yield custom reasoning message with complete buffered reasoning
-        const reasoningPart: SessionStreamPart<any> = {
+        const reasoningPart: Message = {
           type: "reasoning",
-          reasoning: reasoningBuffer,
+          text: reasoningBuffer,
           ...sessionInfo,
         };
         yield reasoningPart;
@@ -93,20 +93,41 @@ export async function* streamPrompt(config: {
       // Handle tool calls
       if (part.type === "tool-call") {
         config.session.step();
-      }
 
-      if (part.type === "tool-call" && part.toolName === "WriteTodos") {
+        if (part.toolName === "WriteTodos") {
+          continue; // Skip WriteTodos tool calls
+        }
+
+        const toolCallPart: Message = {
+          type: "tool-call",
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          args: part.input,
+          ...sessionInfo,
+        };
+        yield toolCallPart;
         continue;
       }
 
-      if (part.type === "tool-result" && part.toolName === "WriteTodos") {
-        const reasoningPart: SessionStreamPart<any> = {
-          type: "todos",
-          todos: part.output.todos,
+      if (part.type === "tool-result") {
+        if (part.toolName === "WriteTodos") {
+          const todosPart: Message = {
+            type: "todos",
+            todos: part.output.todos,
+            ...sessionInfo,
+          };
+          yield todosPart;
+          continue;
+        }
+
+        const toolResultPart: Message = {
+          type: "tool-result",
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          result: part.output,
           ...sessionInfo,
         };
-
-        yield reasoningPart;
+        yield toolResultPart;
         continue;
       }
 
@@ -116,11 +137,11 @@ export async function* streamPrompt(config: {
           part.totalUsage.inputTokens || 0,
           part.totalUsage.outputTokens || 0
         );
-        
+
         // If this is a root session (no parent), emit a completed event instead
         if (!config.session.parentSession) {
           const durationMs = Date.now() - config.session.startTime.getTime();
-          const completedPart: SessionStreamPart<any> = {
+          const completedPart: Message = {
             type: "completed",
             inputTokens: config.session.inputTokens,
             outputTokens: config.session.outputTokens,
@@ -130,17 +151,37 @@ export async function* streamPrompt(config: {
             ...sessionInfo,
           };
           yield completedPart;
-          continue; // Don't emit the original finish event
+          continue;
         }
+
+        // For non-root sessions, emit the finish message
+        const finishPart: Message = {
+          type: "finish",
+          inputTokens: part.totalUsage.inputTokens || 0,
+          outputTokens: part.totalUsage.outputTokens || 0,
+          finishReason: part.finishReason,
+          ...sessionInfo,
+        };
+        yield finishPart;
+        continue;
       }
 
-      // For all other parts, pass through with session info
-      const sessionPart: SessionStreamPart<any> = {
-        ...part,
-        ...sessionInfo,
-      };
+      // Handle error events
+      if (part.type === "error") {
+        const errorPart: Message = {
+          type: "error",
+          error:
+            part.error instanceof Error
+              ? part.error.message
+              : String(part.error),
+          ...sessionInfo,
+        };
+        yield errorPart;
+        continue;
+      }
 
-      yield sessionPart;
+      // For any unmatched message types, continue without yielding
+      continue;
     }
 
     return finalTextOutput;

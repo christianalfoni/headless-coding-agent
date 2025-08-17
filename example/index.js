@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 
-import { spawn } from 'child_process';
+import { query } from '../dist/index.js';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import boxen from 'boxen';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import process from 'process';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 class AgentChat {
   constructor() {
@@ -33,136 +29,102 @@ class AgentChat {
     ));
   }
 
-  formatAgentOutput(data) {
-    try {
-      const parsed = JSON.parse(data);
+  formatAgentOutput(part) {
+    switch (part.type) {
+      case 'text':
+        return chalk.white('💬 ') + part.text;
       
-      switch (parsed.type) {
-        case 'text':
-          return chalk.white('💬 ') + parsed.content;
+      case 'reasoning':
+        return chalk.yellow('🧠 ') + chalk.yellow(part.reasoning);
+      
+      case 'tool-call':
+        return chalk.blue('🔧 ') + chalk.blue.bold(part.toolName) + 
+               (part.parameters ? chalk.gray(` ${JSON.stringify(part.parameters, null, 2)}`) : '');
+      
+      case 'tool-result':
+        const isError = part.isError;
+        const prefix = isError ? chalk.red('❌ ') : chalk.green('✅ ');
+        const content = typeof part.output === 'string' ? 
+          part.output : JSON.stringify(part.output, null, 2);
         
-        case 'tool_use':
-          return chalk.blue('🔧 ') + chalk.blue.bold(parsed.name) + 
-                 (parsed.parameters ? chalk.gray(` ${JSON.stringify(parsed.parameters, null, 2)}`) : '');
+        // Truncate very long outputs
+        const truncated = content.length > 500 ? 
+          content.substring(0, 500) + chalk.gray('... (truncated)') : content;
         
-        case 'tool_result':
-          const isError = parsed.isError;
-          const prefix = isError ? chalk.red('❌ ') : chalk.green('✅ ');
-          const content = typeof parsed.content === 'string' ? 
-            parsed.content : JSON.stringify(parsed.content, null, 2);
-          
-          // Truncate very long outputs
-          const truncated = content.length > 500 ? 
-            content.substring(0, 500) + chalk.gray('... (truncated)') : content;
-          
-          return prefix + chalk.gray(truncated);
-        
-        case 'todos':
-          if (parsed.todos && parsed.todos.length > 0) {
-            this.lastTodos = parsed.todos;
-            return chalk.magenta('📋 Todos Updated:\n') + 
-              parsed.todos.map(todo => {
-                const statusIcon = todo.status === 'completed' ? '✅' : 
-                                 todo.status === 'in_progress' ? '🔄' : '⏳';
-                return `  ${statusIcon} ${todo.content}`;
-              }).join('\n');
-          }
-          return '';
-        
-        case 'session_complete':
-          return chalk.green.bold('✨ Agent session completed!');
-        
-        default:
-          return chalk.gray('📝 ') + JSON.stringify(parsed, null, 2);
-      }
-    } catch (e) {
-      // If not JSON, just return the raw data
-      return chalk.gray(data);
+        return prefix + chalk.gray(truncated);
+      
+      case 'todos':
+        if (part.todos && part.todos.length > 0) {
+          this.lastTodos = part.todos;
+          return chalk.magenta('📋 Todos Updated:\n') + 
+            part.todos.map(todo => {
+              const statusIcon = todo.status === 'completed' ? '✅' : 
+                               todo.status === 'in_progress' ? '🔄' : '⏳';
+              return `  ${statusIcon} ${todo.description}`;
+            }).join('\n');
+        }
+        return '';
+      
+      case 'completed':
+        return chalk.green.bold('✨ Agent session completed!') +
+               chalk.gray(` (${part.stepCount} steps, ${part.durationMs}ms)`);
+      
+      default:
+        return chalk.gray('📝 ') + JSON.stringify(part, null, 2);
     }
   }
 
   async executeAgent(prompt) {
-    return new Promise((resolve, reject) => {
+    try {
       this.isAgentRunning = true;
       
-      // Build command args
-      const agentPath = join(__dirname, '..', 'dist', 'cli.js');
-      const args = ['--prompt', prompt];
-      
-      // Add todos from previous session if available
-      if (this.lastTodos && this.lastTodos.length > 0) {
-        // Convert todos to expected format
-        const todosForAgent = this.lastTodos
-          .filter(todo => todo.status !== 'completed')
-          .map(todo => ({
-            description: todo.content,
-            status: todo.status === 'in_progress' ? 'in_progress' : 'pending'
-          }));
-        
-        if (todosForAgent.length > 0) {
-          args.push('--todos', JSON.stringify(todosForAgent));
-        }
-      }
-
-      const agent = spawn('node', [agentPath, ...args], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        cwd: process.cwd()
-      });
+      // Prepare todos from previous session if available
+      const todos = this.lastTodos && this.lastTodos.length > 0 
+        ? this.lastTodos
+            .filter(todo => todo.status !== 'completed')
+            .map(todo => ({
+              description: todo.description,
+              context: todo.context || 'Continued from previous session',
+              status: todo.status === 'in_progress' ? 'in_progress' : 'pending'
+            }))
+        : undefined;
 
       this.currentSpinner = ora('🤖 Agent is thinking...').start();
       let hasOutput = false;
 
-      agent.stdout.on('data', (data) => {
+      // Use the SDK query function
+      for await (const part of query({
+        prompt,
+        workingDirectory: process.cwd(),
+        maxSteps: 50,
+        todos
+      })) {
         if (this.currentSpinner) {
           this.currentSpinner.stop();
           this.currentSpinner = null;
           hasOutput = true;
         }
 
-        const lines = data.toString().split('\n').filter(line => line.trim());
-        for (const line of lines) {
-          const formatted = this.formatAgentOutput(line.trim());
-          if (formatted) {
-            console.log(formatted);
-          }
+        const formatted = this.formatAgentOutput(part);
+        if (formatted) {
+          console.log(formatted);
         }
-      });
+      }
 
-      agent.stderr.on('data', (data) => {
-        if (this.currentSpinner) {
-          this.currentSpinner.stop();
-          this.currentSpinner = null;
-        }
-        console.error(chalk.red('Error: ') + data.toString());
-      });
-
-      agent.on('close', (code) => {
-        if (this.currentSpinner) {
-          this.currentSpinner.stop();
-          this.currentSpinner = null;
-        }
-        
-        this.isAgentRunning = false;
-        
-        if (code === 0) {
-          if (!hasOutput) {
-            console.log(chalk.green('✨ Agent completed successfully (no output)'));
-          }
-          resolve();
-        } else {
-          reject(new Error(`Agent exited with code ${code}`));
-        }
-      });
-
-      agent.on('error', (err) => {
-        if (this.currentSpinner) {
-          this.currentSpinner.stop();
-          this.currentSpinner = null;
-        }
-        this.isAgentRunning = false;
-        reject(err);
-      });
-    });
+      this.isAgentRunning = false;
+      
+      if (!hasOutput) {
+        console.log(chalk.green('✨ Agent completed successfully (no output)'));
+      }
+      
+    } catch (error) {
+      if (this.currentSpinner) {
+        this.currentSpinner.stop();
+        this.currentSpinner = null;
+      }
+      this.isAgentRunning = false;
+      throw error;
+    }
   }
 
   async promptUser() {

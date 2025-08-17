@@ -1,4 +1,4 @@
-import type { TextStreamPart, ToolSet } from "ai";
+// Types for headless agents
 
 // Base session info that we add to all messages
 export interface SessionInfo {
@@ -6,35 +6,61 @@ export interface SessionInfo {
   parentSessionId?: string;
 }
 
-// Custom stream parts for buffered content
-export type CustomStreamPart = 
-  | { type: 'text'; text: string; finishReason?: string }
-  | { type: 'reasoning'; reasoning: string; finishReason?: string }
-  | { type: 'todos'; todos: Todo[]; finishReason?: string }
-  | { type: 'completed'; inputTokens: number; outputTokens: number; stepCount: number; durationMs: number; todos?: Todo[] };
+// Individual message types that compose SessionInfo
+export type TextMessage = {
+  type: "text";
+  text: string;
+  finishReason?: string;
+} & SessionInfo;
+export type ReasoningMessage = {
+  type: "reasoning";
+  text: string;
+  finishReason?: string;
+} & SessionInfo;
+export type TodosMessage = {
+  type: "todos";
+  todos: Todo[];
+  finishReason?: string;
+} & SessionInfo;
+export type CompletedMessage = {
+  type: "completed";
+  inputTokens: number;
+  outputTokens: number;
+  stepCount: number;
+  durationMs: number;
+  todos?: Todo[];
+} & SessionInfo;
+export type ToolCallMessage = {
+  type: "tool-call";
+  toolCallId: string;
+  toolName: string;
+  args: any;
+} & SessionInfo;
+export type ToolResultMessage = {
+  type: "tool-result";
+  toolCallId: string;
+  toolName: string;
+  result: any;
+  finishReason?: string;
+} & SessionInfo;
+export type ErrorMessage = { type: "error"; error: string } & SessionInfo;
+export type FinishMessage = {
+  type: "finish";
+  inputTokens: number;
+  outputTokens: number;
+  finishReason: string;
+} & SessionInfo;
 
-// Pass-through stream parts (everything except text/reasoning start, deltas and ends, and control events)
-export type PassThroughStreamPart<TOOLS extends ToolSet = ToolSet> = Exclude<
-  TextStreamPart<TOOLS>,
-  | { type: 'start' }
-  | { type: 'start-step' }
-  | { type: 'finish-step' }
-  | { type: 'text-start' }
-  | { type: 'text-delta' }
-  | { type: 'text-end' }
-  | { type: 'reasoning-start' }
-  | { type: 'reasoning-delta' }
-  | { type: 'reasoning-end' }
->;
-
-// Combined stream parts - either pass-through or custom
-export type FilteredStreamPart<TOOLS extends ToolSet = ToolSet> = 
-  | PassThroughStreamPart<TOOLS>
-  | CustomStreamPart;
-
-// Extended stream parts with session information
-export type SessionStreamPart<TOOLS extends ToolSet = ToolSet> =
-  FilteredStreamPart<TOOLS> & SessionInfo;
+// Union of all message types
+export type Message =
+  | TextMessage
+  | ReasoningMessage
+  | TodosMessage
+  | CompletedMessage
+  | ToolCallMessage
+  | ToolResultMessage
+  | ErrorMessage
+  | FinishMessage;
 
 // Session interface
 export interface Session {

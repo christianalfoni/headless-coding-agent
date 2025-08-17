@@ -266,41 +266,59 @@ Used in `Session.summarizeTodos()`:
 
 ## Message Types
 
-### SessionStreamPart Types
+### Message Architecture
 
-All messages include session information:
+All messages compose a base `SessionInfo` interface with specific message data:
 
 ```typescript
 interface SessionInfo {
   sessionId: string;
   parentSessionId?: string;
 }
+
+type Message = 
+  | TextMessage
+  | ReasoningMessage  
+  | TodosMessage
+  | CompletedMessage
+  | ToolCallMessage
+  | ToolResultMessage
+  | ErrorMessage
+  | FinishMessage;
 ```
 
-### Core Message Types
+### Individual Message Types
 
-#### Text Output
+#### TextMessage
+
+AI-generated text output:
 
 ```json
 {
   "type": "text",
   "text": "I'm analyzing your TypeScript configuration...",
-  "sessionId": "uuid",
+  "sessionId": "uuid-1234",
+  "parentSessionId": "uuid-parent",
   "finishReason": "stop"
 }
 ```
 
-#### Reasoning
+#### ReasoningMessage
+
+AI's internal reasoning process:
 
 ```json
 {
   "type": "reasoning",
-  "reasoning": "The user wants me to fix errors. I should start by running a type check.",
-  "sessionId": "uuid"
+  "text": "The user wants me to fix errors. I should start by running a type check.",
+  "sessionId": "uuid-1234",
+  "finishReason": "continue"
 }
 ```
 
-#### Todos Update
+#### TodosMessage
+
+Todo list updates:
 
 ```json
 {
@@ -312,38 +330,48 @@ interface SessionInfo {
       "status": "pending"
     }
   ],
-  "sessionId": "uuid"
+  "sessionId": "uuid-1234"
 }
 ```
 
-#### Tool Calls
+#### ToolCallMessage
+
+Tool execution initiation:
 
 ```json
 {
   "type": "tool-call",
-  "toolCallId": "call_123",
+  "toolCallId": "call_abc123",
   "toolName": "bashTool",
-  "parameters": {
+  "args": {
     "command": "npm run typecheck",
     "description": "Check for type errors"
   },
-  "sessionId": "uuid"
+  "sessionId": "uuid-1234"
 }
 ```
 
-#### Tool Results
+#### ToolResultMessage
+
+Tool execution results:
 
 ```json
 {
   "type": "tool-result",
-  "toolCallId": "call_123",
+  "toolCallId": "call_abc123",
   "toolName": "bashTool",
-  "output": "Found 3 errors in 2 files",
-  "sessionId": "uuid"
+  "result": {
+    "stdout": "Found 3 errors in 2 files",
+    "exitCode": 1
+  },
+  "sessionId": "uuid-1234",
+  "finishReason": "stop"
 }
 ```
 
-#### Session Completion
+#### CompletedMessage
+
+Root session completion (no parent session):
 
 ```json
 {
@@ -356,11 +384,38 @@ interface SessionInfo {
     {
       "description": "Fix TypeScript errors",
       "context": "Build process was failing due to type issues",
-      "status": "completed",
+      "status": "completed", 
       "summary": "Successfully fixed 3 type errors in user.ts and auth.ts"
     }
   ],
-  "sessionId": "uuid"
+  "sessionId": "uuid-1234"
+}
+```
+
+#### FinishMessage
+
+Child session completion:
+
+```json
+{
+  "type": "finish",
+  "inputTokens": 320,
+  "outputTokens": 180,
+  "finishReason": "stop",
+  "sessionId": "uuid-child",
+  "parentSessionId": "uuid-1234"
+}
+```
+
+#### ErrorMessage
+
+Error handling:
+
+```json
+{
+  "type": "error",
+  "error": "Failed to execute command: permission denied",
+  "sessionId": "uuid-1234"
 }
 ```
 

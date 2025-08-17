@@ -38,13 +38,12 @@ Running on ${os.platform()}.`,
       const { stdout, stderr } = await execAsync(command, options);
 
       return {
-        output: stdout?.toString() || stderr?.toString() || "",
+        stdout: stdout?.toString() || stderr?.toString() || "",
         success: !stderr,
         stderr: stderr?.toString() || undefined,
       };
     } catch (error: any) {
       return {
-        output: error.message || "Command failed",
         success: false,
         error: error.message,
       };

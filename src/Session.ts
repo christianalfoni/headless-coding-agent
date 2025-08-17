@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { Todo, SessionStreamPart } from "./types";
+import { Todo, Message } from "./types";
 import { SessionEnvironment } from "./Environment";
 import { streamPrompt } from "./prompt";
 import { writeTodosTool } from "./tools/todos";
@@ -120,7 +120,7 @@ export class Session {
     return rootSession.env.maxSteps;
   }
 
-  async *exec(): AsyncGenerator<SessionStreamPart<any>> {
+  async *exec(): AsyncGenerator<Message> {
     yield* this.evaluateTodos();
     if (this.todos.length > 1) {
       yield* this.delegateTodos();
@@ -138,7 +138,7 @@ export class Session {
     return yield* this.summarizeTodos();
   }
 
-  async *evaluateTodos(): AsyncGenerator<SessionStreamPart<any>> {
+  async *evaluateTodos(): AsyncGenerator<Message> {
     const completedTodos = this.todos.filter(
       (todo) => todo.status === "completed"
     );
@@ -204,7 +204,7 @@ Please evaluate the current pending todos and provide an updated list of todos n
 
   async *executeTodo(
     todo: Todo
-  ): AsyncGenerator<SessionStreamPart<any>, string> {
+  ): AsyncGenerator<Message, string> {
     const systemPrompt = `You are an AI assistant that executes todos. You have been given a specific todo to accomplish. Execute the todo using the available tools.
 
 Working directory: ${this.env.workingDirectory}
@@ -246,7 +246,7 @@ The user should handle running and reviewing long-running processes themselves.`
     });
   }
 
-  async *delegateTodos(): AsyncGenerator<SessionStreamPart<any>> {
+  async *delegateTodos(): AsyncGenerator<Message> {
     while (this.todos.some((todo) => todo.status === "pending")) {
       // Find the first pending todo
       const pendingTodo = this.todos.find((todo) => todo.status === "pending");
@@ -282,7 +282,7 @@ The user should handle running and reviewing long-running processes themselves.`
     }
   }
 
-  async *summarizeTodos(): AsyncGenerator<SessionStreamPart<any>, string> {
+  async *summarizeTodos(): AsyncGenerator<Message, string> {
     const completedTodos = this.todos
       .filter((todo) => todo.status === "completed")
       .map(
