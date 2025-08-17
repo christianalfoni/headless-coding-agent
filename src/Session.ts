@@ -51,7 +51,7 @@ export class Session {
     userPrompt: string,
     env: SessionEnvironment,
     parentSession?: Session,
-    initialTodos?: { description: string; status?: "pending" | "in_progress" | "completed" }[]
+    initialTodos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[]
   ) {
     const session = new Session(userPrompt, env, parentSession, initialTodos);
 
@@ -71,12 +71,13 @@ export class Session {
     userPrompt: string,
     env: SessionEnvironment,
     parentSession?: Session,
-    initialTodos?: { description: string; status?: "pending" | "in_progress" | "completed" }[]
+    initialTodos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[]
   ) {
     this.sessionId = uuidv4();
     this.userPrompt = userPrompt;
     this.todos = initialTodos ? initialTodos.map(todo => ({
       description: todo.description,
+      context: todo.context,
       status: (todo.status || "pending") as "pending" | "in_progress" | "completed",
       summary: undefined
     })) : [];
@@ -121,15 +122,19 @@ export class Session {
 
   async *exec(): AsyncGenerator<SessionStreamPart<any>> {
     yield* this.evaluateTodos();
-    console.log("Evaluated todos", this.todos);
     if (this.todos.length > 1) {
       yield* this.delegateTodos();
     } else if (this.todos[0]) {
       const summary = yield* this.executeTodo(this.todos[0]);
       this.todos[0].status = "completed";
       this.todos[0].summary = summary;
+      yield {
+        type: "todos" as const,
+        todos: structuredClone(this.todos),
+        sessionId: this.sessionId,
+        parentSessionId: this.parentSession?.sessionId
+      };
     }
-    console.log("Executed todos", this.todos);
     return yield* this.summarizeTodos();
   }
 
@@ -185,8 +190,15 @@ Please evaluate the current pending todos and provide an updated list of todos n
             status: "pending" as const,
           })),
         ];
+        yield {
+          type: "todos" as const,
+          todos: structuredClone(this.todos),
+          sessionId: this.sessionId,
+          parentSessionId: this.parentSession?.sessionId
+        };
+      } else {
+        yield part;
       }
-      yield part;
     }
   }
 
@@ -242,6 +254,12 @@ The user should handle running and reviewing long-running processes themselves.`
 
       // Mark todo as in_progress
       pendingTodo.status = "in_progress";
+      yield {
+        type: "todos" as const,
+        todos: structuredClone(this.todos),
+        sessionId: this.sessionId,
+        parentSessionId: this.parentSession?.sessionId
+      };
 
       // Execute the todo as a prompt in the child session
       const text = yield* Session.create(
@@ -253,6 +271,12 @@ The user should handle running and reviewing long-running processes themselves.`
       // Mark todo as completed
       pendingTodo.status = "completed";
       pendingTodo.summary = text;
+      yield {
+        type: "todos" as const,
+        todos: structuredClone(this.todos),
+        sessionId: this.sessionId,
+        parentSessionId: this.parentSession?.sessionId
+      };
 
       yield* this.evaluateTodos();
     }

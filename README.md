@@ -63,6 +63,7 @@ interface QueryOptions {
   todos?: {
     // Resume with existing todos
     description: string;
+    context: string; // Information on why this todo was created
     status?: "pending" | "in_progress" | "completed";
   }[];
 }
@@ -75,11 +76,18 @@ interface QueryOptions {
 const todos = [
   {
     description: "Analyze existing code structure",
+    context: "Initial analysis required to understand current architecture",
     status: "completed",
     summary: "Found 15 components with consistent TypeScript patterns",
   },
-  { description: "Implement authentication system" },
-  { description: "Write unit tests" },
+  { 
+    description: "Implement authentication system",
+    context: "Core feature needed for user management functionality"
+  },
+  { 
+    description: "Write unit tests",
+    context: "Quality assurance needed for reliable deployment"
+  },
 ];
 
 for await (const part of query({
@@ -119,7 +127,7 @@ agent --prompt "Debug the authentication flow" --maxSteps 20
 agent --prompt "Refactor this code" --model "openai/gpt-4o"
 
 # Resume session with todos
-agent --prompt "Continue implementation" --todos '[{"description":"Setup database schema","status":"completed"},{"description":"Implement API endpoints"}]'
+agent --prompt "Continue implementation" --todos '[{"description":"Setup database schema","context":"Database foundation needed for user data","status":"completed"},{"description":"Implement API endpoints","context":"Backend services required for frontend integration"}]'
 ```
 
 ### CLI Options
@@ -300,6 +308,7 @@ interface SessionInfo {
   "todos": [
     {
       "description": "Fix TypeScript errors in src/",
+      "context": "Type checking revealed errors that need fixing",
       "status": "pending"
     }
   ],
@@ -346,6 +355,7 @@ interface SessionInfo {
   "todos": [
     {
       "description": "Fix TypeScript errors",
+      "context": "Build process was failing due to type issues",
       "status": "completed",
       "summary": "Successfully fixed 3 type errors in user.ts and auth.ts"
     }
@@ -369,11 +379,13 @@ for await (const part of query(options)) {
     // [
     //   {
     //     description: "Fix TypeScript errors",
+    //     context: "Compilation was failing due to type issues",
     //     status: "completed",
     //     summary: "Fixed 3 type errors in user.ts and auth.ts"
     //   },
     //   {
     //     description: "Update unit tests",
+    //     context: "Test coverage needed improvement after refactoring",
     //     status: "completed",
     //     summary: "Added 5 new test cases and fixed 2 failing tests"
     //   }
@@ -391,6 +403,7 @@ const resumeOptions = {
   workingDirectory: "./project",
   todos: savedTodos.map((todo) => ({
     description: todo.description,
+    context: todo.context, // Preserve context information
     status: todo.status,
     summary: todo.summary, // Preserve completed work summaries
   })),

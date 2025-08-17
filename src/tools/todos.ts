@@ -3,6 +3,7 @@ import { z } from "zod";
 
 const todoSchema = z.object({
   description: z.string(),
+  context: z.string(),
 });
 
 const inputSchema = z.object({
@@ -18,6 +19,7 @@ export const writeTodosTool = tool({
   execute: async (input: {
     todos: {
       description: string;
+      context: string;
     }[];
   }) => {
     // This tool manages todo state

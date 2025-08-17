@@ -6,7 +6,8 @@ export interface QueryOptions {
   workingDirectory: string;
   maxSteps?: number;
   model?: string;
-  todos?: { description: string; status?: "pending" | "in_progress" | "completed" }[];
+  todos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[];
+  stdout?: boolean;
 }
 
 export async function* query(options: QueryOptions) {
@@ -14,7 +15,8 @@ export async function* query(options: QueryOptions) {
     options.workingDirectory,
     undefined,
     options.maxSteps,
-    options.model
+    options.model,
+    options.stdout || false
   );
   return yield* Session.create(options.prompt, context, undefined, options.todos);
 }

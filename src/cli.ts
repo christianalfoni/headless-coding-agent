@@ -8,7 +8,7 @@ function parseArgs() {
   let format = false;
   let maxSteps: number | undefined;
   let model: string | undefined;
-  let initialTodos: { description: string; status?: "pending" | "in_progress" | "completed" }[] | undefined;
+  let initialTodos: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[] | undefined;
   
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--prompt' && i + 1 < args.length) {
@@ -37,6 +37,10 @@ function parseArgs() {
         for (const todo of initialTodos) {
           if (!todo.description) {
             console.error('Error: Each todo must have a "description" field');
+            process.exit(1);
+          }
+          if (!todo.context) {
+            console.error('Error: Each todo must have a "context" field');
             process.exit(1);
           }
           if (todo.status && !["pending", "in_progress", "completed"].includes(todo.status)) {
@@ -74,7 +78,8 @@ async function main() {
       workingDirectory: process.cwd(),
       maxSteps,
       model,
-      todos: initialTodos
+      todos: initialTodos,
+      stdout: true
     });
     
     for await (const part of stream) {

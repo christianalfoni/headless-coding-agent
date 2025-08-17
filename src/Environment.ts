@@ -5,12 +5,14 @@ export class SessionEnvironment {
   public gitStatus?: unknown;
   public model: ReturnType<typeof createModel>;
   public maxSteps?: number;
+  public stdout: boolean;
 
-  constructor(workingDirectory: string, gitStatus?: unknown, maxSteps?: number, modelId?: string) {
+  constructor(workingDirectory: string, gitStatus?: unknown, maxSteps?: number, modelId?: string, stdout: boolean = false) {
     this.workingDirectory = workingDirectory;
     this.gitStatus = gitStatus;
     this.maxSteps = maxSteps;
     this.model = createModel(modelId);
+    this.stdout = stdout;
   }
 
   refresh(): void {
