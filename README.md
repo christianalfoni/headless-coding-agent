@@ -1,4 +1,4 @@
-# Headless Code Agent
+# Headless Coding Agent
 
 A headless AI coding agent that autonomously executes development tasks through streaming JSON output. Use any model to plan, implement, and manage complex coding workflows while providing full transparency through structured output.
 
@@ -12,6 +12,7 @@ A headless AI coding agent that autonomously executes development tasks through 
 - On your main development machine without proper isolation
 
 **Recommended environments:**
+
 - Docker containers
 - Virtual machines
 - Isolated development sandboxes
@@ -80,13 +81,13 @@ const todos = [
     status: "completed",
     summary: "Found 15 components with consistent TypeScript patterns",
   },
-  { 
+  {
     description: "Implement authentication system",
-    context: "Core feature needed for user management functionality"
+    context: "Core feature needed for user management functionality",
   },
-  { 
+  {
     description: "Write unit tests",
-    context: "Quality assurance needed for reliable deployment"
+    context: "Quality assurance needed for reliable deployment",
   },
 ];
 
@@ -145,26 +146,32 @@ agent --prompt "Continue implementation" --todos '[{"description":"Setup databas
 The agent supports multiple AI providers through a unified interface. Specify models using the format `provider/model-name`:
 
 #### Anthropic
+
 - **Environment Variable**: `ANTHROPIC_API_KEY`
 - **Example**: `agent --prompt "Fix bugs" --model "anthropic/claude-3-5-sonnet-20241022"`
 
 #### OpenAI
+
 - **Environment Variable**: `OPENAI_API_KEY`
 - **Example**: `agent --prompt "Code review" --model "openai/gpt-4o"`
 
 #### Google
+
 - **Environment Variable**: `GOOGLE_GENERATIVE_AI_API_KEY`
 - **Example**: `agent --prompt "Analyze data" --model "google/gemini-1.5-pro"`
 
 #### Mistral
+
 - **Environment Variable**: `MISTRAL_API_KEY`
 - **Example**: `agent --prompt "Complex task" --model "mistral/mistral-large-latest"`
 
 #### xAI (Grok)
+
 - **Environment Variable**: `XAI_API_KEY`
 - **Example**: `agent --prompt "Creative coding" --model "xai/grok-beta"`
 
 #### Together AI
+
 - **Environment Variable**: `TOGETHER_AI_API_KEY`
 - **Example**: `agent --prompt "OSS project" --model "together/meta-llama/Llama-2-70b-chat-hf"`
 
@@ -276,9 +283,9 @@ interface SessionInfo {
   parentSessionId?: string;
 }
 
-type Message = 
+type Message =
   | TextMessage
-  | ReasoningMessage  
+  | ReasoningMessage
   | TodosMessage
   | CompletedMessage
   | ToolCallMessage
@@ -355,6 +362,7 @@ Tool execution initiation:
 Tool execution results. The `result` field structure varies by tool:
 
 **Bash** - Execute shell commands:
+
 ```json
 {
   "type": "tool-result",
@@ -370,9 +378,10 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **Read** - Read file contents:
+
 ```json
 {
-  "type": "tool-result", 
+  "type": "tool-result",
   "toolCallId": "call_def456",
   "toolName": "Read",
   "result": {
@@ -385,10 +394,11 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **Write** - Write files:
+
 ```json
 {
   "type": "tool-result",
-  "toolCallId": "call_ghi789", 
+  "toolCallId": "call_ghi789",
   "toolName": "Write",
   "result": {
     "output": "Successfully wrote to /path/to/file.txt",
@@ -399,11 +409,12 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **Edit** - Edit files with literal text replacement:
+
 ```json
 {
   "type": "tool-result",
   "toolCallId": "call_jkl012",
-  "toolName": "Edit", 
+  "toolName": "Edit",
   "result": {
     "ok": true
   },
@@ -412,6 +423,7 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **MultiEdit** - Batch file edits with literal text replacement:
+
 ```json
 {
   "type": "tool-result",
@@ -425,6 +437,7 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **Glob** - Find files with patterns:
+
 ```json
 {
   "type": "tool-result",
@@ -440,9 +453,10 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **Grep** - Search file contents:
+
 ```json
 {
-  "type": "tool-result", 
+  "type": "tool-result",
   "toolCallId": "call_stu901",
   "toolName": "Grep",
   "result": {
@@ -455,10 +469,11 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **Ls** - List directories:
+
 ```json
 {
   "type": "tool-result",
-  "toolCallId": "call_vwx234", 
+  "toolCallId": "call_vwx234",
   "toolName": "Ls",
   "result": {
     "output": "file1.txt\nfile2.txt\nsubdir/",
@@ -470,16 +485,17 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **WebFetch** - Fetch web content:
+
 ```json
 {
   "type": "tool-result",
   "toolCallId": "call_yzab567",
-  "toolName": "WebFetch", 
+  "toolName": "WebFetch",
   "result": {
     "url": "https://example.com/page",
     "status": 200,
     "mime": "text/html",
-    "title": "Page Title", 
+    "title": "Page Title",
     "text": "Main content extracted...",
     "bytes": 4096,
     "wasTruncated": false
@@ -489,6 +505,7 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **WebSearch** - Search the web:
+
 ```json
 {
   "type": "tool-result",
@@ -497,7 +514,7 @@ Tool execution results. The `result` field structure varies by tool:
   "result": [
     {
       "title": "Search Result Title",
-      "url": "https://example.com/result", 
+      "url": "https://example.com/result",
       "snippet": "Search result description...",
       "engine": "duckduckgo"
     }
@@ -507,9 +524,10 @@ Tool execution results. The `result` field structure varies by tool:
 ```
 
 **WriteTodos** - Manage todos (evaluation phase only):
+
 ```json
 {
-  "type": "tool-result", 
+  "type": "tool-result",
   "toolCallId": "call_ghij123",
   "toolName": "WriteTodos",
   "result": {
@@ -533,7 +551,7 @@ Tool execution errors. Emitted when a tool fails during execution:
 {
   "type": "tool-error",
   "toolCallId": "call_abc123",
-  "toolName": "Bash", 
+  "toolName": "Bash",
   "error": "Command failed: npm run typecheck - exit code 1",
   "sessionId": "uuid-1234"
 }
@@ -556,7 +574,7 @@ Root session completion (no parent session):
     {
       "description": "Fix TypeScript errors",
       "context": "Build process was failing due to type issues",
-      "status": "completed", 
+      "status": "completed",
       "summary": "Successfully fixed 3 type errors in user.ts and auth.ts"
     }
   ],
