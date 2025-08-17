@@ -10,7 +10,8 @@ export interface SessionInfo {
 export type CustomStreamPart = 
   | { type: 'text'; text: string; finishReason?: string }
   | { type: 'reasoning'; reasoning: string; finishReason?: string }
-  | { type: 'todos'; todos: Todo[]; finishReason?: string };
+  | { type: 'todos'; todos: Todo[]; finishReason?: string }
+  | { type: 'completed'; inputTokens: number; outputTokens: number; stepCount: number; durationMs: number };
 
 // Pass-through stream parts (everything except text/reasoning start, deltas and ends, and control events)
 export type PassThroughStreamPart<TOOLS extends ToolSet = ToolSet> = Exclude<
@@ -44,7 +45,11 @@ export interface Session {
   };
   todos: Todo[];
   stepCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  startTime: Date;
   step(): void;
+  increaseTokens(inputTokens: number, outputTokens: number): void;
 }
 
 // Todo interface (kept from original)

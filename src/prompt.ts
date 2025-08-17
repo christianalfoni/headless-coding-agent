@@ -110,6 +110,29 @@ export async function* streamPrompt(config: {
         continue;
       }
 
+      // Handle finish event to track token usage
+      if (part.type === "finish") {
+        config.session.increaseTokens(
+          part.totalUsage.inputTokens || 0,
+          part.totalUsage.outputTokens || 0
+        );
+        
+        // If this is a root session (no parent), emit a completed event instead
+        if (!config.session.parentSession) {
+          const durationMs = Date.now() - config.session.startTime.getTime();
+          const completedPart: SessionStreamPart<any> = {
+            type: "completed",
+            inputTokens: config.session.inputTokens,
+            outputTokens: config.session.outputTokens,
+            stepCount: config.session.stepCount,
+            durationMs,
+            ...sessionInfo,
+          };
+          yield completedPart;
+          continue; // Don't emit the original finish event
+        }
+      }
+
       // For all other parts, pass through with session info
       const sessionPart: SessionStreamPart<any> = {
         ...part,

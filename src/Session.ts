@@ -11,6 +11,8 @@ import { grepTool } from "./tools/grep";
 import { lsTool } from "./tools/ls";
 import { writeTool } from "./tools/write";
 import { multiEditTool } from "./tools/multiEdit";
+import { webFetch } from "./tools/webFetch";
+import { webSearch } from "./tools/webSearch";
 
 const getSystemPrompt = (
   workingDirectory: string
@@ -34,7 +36,7 @@ When evaluating todos:
 - Focus on practical, executable todos that can be accomplished with available tools
 
 Todo Scoping Based on Tool Call Complexity:
-- Available tools: bash, edit, glob, grep, ls, read
+- Available tools: bash, edit, glob, grep, ls, read, webSearch, webFetch
 - Scope todos around meaningful outcomes, not individual tool calls
 - Low complexity (1-3 tool calls): Create specific, granular todos for direct operations
 - Medium complexity (4-8 tool calls): Group related searches, investigations, and edits into single todos
@@ -62,6 +64,7 @@ export class Session {
   public outputTokens: number;
   public stepCount: number;
   public userPrompt: string;
+  public readonly startTime: Date;
 
   constructor(
     userPrompt: string,
@@ -76,6 +79,7 @@ export class Session {
     this.inputTokens = 0;
     this.outputTokens = 0;
     this.stepCount = 0;
+    this.startTime = new Date();
   }
 
   step(): void {
@@ -89,6 +93,14 @@ export class Session {
           `Maximum steps exceeded: ${this.stepCount}/${this.env.maxSteps}`
         );
       }
+    }
+  }
+
+  increaseTokens(inputTokens: number, outputTokens: number): void {
+    this.inputTokens += inputTokens;
+    this.outputTokens += outputTokens;
+    if (this.parentSession) {
+      this.parentSession.increaseTokens(inputTokens, outputTokens);
     }
   }
 
@@ -194,6 +206,8 @@ Focus on completing the todo efficiently and accurately. Use the tools available
         lsTool,
         writeTool,
         multiEditTool,
+        webFetch,
+        webSearch,
       },
       toolChoice: "auto",
       maxSteps: this.getMaxSteps(),
