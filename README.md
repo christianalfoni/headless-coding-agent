@@ -291,8 +291,7 @@ type Message =
   | ToolCallMessage
   | ToolResultMessage
   | ToolErrorMessage
-  | ErrorMessage
-  | FinishMessage;
+  | ErrorMessage;
 ```
 
 ### Individual Message Types
@@ -579,20 +578,6 @@ Root session completion (no parent session):
     }
   ],
   "sessionId": "uuid-1234"
-}
-```
-
-#### FinishMessage
-
-Child session completion:
-
-```json
-{
-  "type": "finish",
-  "inputTokens": 320,
-  "outputTokens": 180,
-  "sessionId": "uuid-child",
-  "parentSessionId": "uuid-1234"
 }
 ```
 

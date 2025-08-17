@@ -46,11 +46,11 @@ export type EditToolCallMessage = {
   type: "tool-call";
   toolCallId: string;
   toolName: "Edit";
-  args: { 
-    file: string; 
-    find: string; 
-    replace: string; 
-    replaceAll: boolean; 
+  args: {
+    file: string;
+    find: string;
+    replace: string;
+    replaceAll: boolean;
   };
 } & SessionInfo;
 
@@ -86,8 +86,8 @@ export type MultiEditToolCallMessage = {
   type: "tool-call";
   toolCallId: string;
   toolName: "MultiEdit";
-  args: { 
-    file: string; 
+  args: {
+    file: string;
     edits: Array<{
       find: string;
       replace: string;
@@ -107,7 +107,12 @@ export type WebSearchToolCallMessage = {
   type: "tool-call";
   toolCallId: string;
   toolName: "WebSearch";
-  args: { query: string; topK?: number; language?: string; safesearch?: number };
+  args: {
+    query: string;
+    topK?: number;
+    language?: string;
+    safesearch?: number;
+  };
 } & SessionInfo;
 
 export type ToolCallMessage =
@@ -299,11 +304,6 @@ export type ToolErrorMessage =
   | WebFetchToolErrorMessage
   | WebSearchToolErrorMessage;
 export type ErrorMessage = { type: "error"; error: string } & SessionInfo;
-export type FinishMessage = {
-  type: "finish";
-  inputTokens: number;
-  outputTokens: number;
-} & SessionInfo;
 
 // Union of all message types
 export type Message =
@@ -314,8 +314,7 @@ export type Message =
   | ToolCallMessage
   | ToolResultMessage
   | ToolErrorMessage
-  | ErrorMessage
-  | FinishMessage;
+  | ErrorMessage;
 
 // Session interface
 export interface Session {

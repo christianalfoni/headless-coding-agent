@@ -137,7 +137,10 @@ export async function* streamPrompt(config: {
           type: "tool-error",
           toolCallId: part.toolCallId,
           toolName: part.toolName as any,
-          error: part.error instanceof Error ? part.error.message : String(part.error),
+          error:
+            part.error instanceof Error
+              ? part.error.message
+              : String(part.error),
           ...sessionInfo,
         } as any;
         yield toolErrorPart;
@@ -151,30 +154,6 @@ export async function* streamPrompt(config: {
           part.totalUsage.outputTokens || 0
         );
 
-        // If this is a root session (no parent), emit a completed event instead
-        if (!config.session.parentSession) {
-          const durationMs = Date.now() - config.session.startTime.getTime();
-          const completedPart: Message = {
-            type: "completed",
-            inputTokens: config.session.inputTokens,
-            outputTokens: config.session.outputTokens,
-            stepCount: config.session.stepCount,
-            durationMs,
-            todos: config.session.todos,
-            ...sessionInfo,
-          };
-          yield completedPart;
-          continue;
-        }
-
-        // For non-root sessions, emit the finish message
-        const finishPart: Message = {
-          type: "finish",
-          inputTokens: part.totalUsage.inputTokens || 0,
-          outputTokens: part.totalUsage.outputTokens || 0,
-          ...sessionInfo,
-        };
-        yield finishPart;
         continue;
       }
 
