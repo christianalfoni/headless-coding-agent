@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
-import { query } from '../dist/index.js';
-import inquirer from 'inquirer';
-import chalk from 'chalk';
-import ora from 'ora';
-import boxen from 'boxen';
-import process from 'process';
-
+import { query } from "../dist/index.js";
+import inquirer from "inquirer";
+import chalk from "chalk";
+import ora from "ora";
+import boxen from "boxen";
+import process from "process";
 
 class AgentChat {
   constructor() {
@@ -16,92 +15,116 @@ class AgentChat {
   }
 
   displayWelcome() {
-    console.log(boxen(
-      chalk.cyan.bold('🤖 Headless Agent Chat Interface') + '\n\n' +
-      chalk.gray('Type your prompts to interact with the agent.\n') +
-      chalk.gray('Type "exit" or "quit" to leave.'),
-      {
-        padding: 1,
-        margin: 1,
-        borderStyle: 'round',
-        borderColor: 'cyan'
-      }
-    ));
+    console.log(
+      boxen(
+        chalk.cyan.bold("🤖 Headless Agent Chat Interface") +
+          "\n\n" +
+          chalk.gray("Type your prompts to interact with the agent.\n") +
+          chalk.gray('Type "exit" or "quit" to leave.'),
+        {
+          padding: 1,
+          margin: 1,
+          borderStyle: "round",
+          borderColor: "cyan",
+        }
+      )
+    );
   }
 
   formatAgentOutput(part) {
     switch (part.type) {
-      case 'text':
-        return chalk.white('💬 ') + part.text;
-      
-      case 'reasoning':
-        return chalk.yellow('🧠 ') + chalk.yellow(part.text);
-      
-      case 'tool-call':
+      case "text":
+        return chalk.white("💬 ") + part.text;
+
+      case "reasoning":
+        return chalk.yellow("🧠 ") + chalk.yellow(part.text);
+
+      case "tool-call":
         let toolDescription = chalk.blue.bold(part.toolName);
-        if (part.toolName === 'Edit') {
-          toolDescription += chalk.gray(` (${part.args.file}: "${part.args.find}" → "${part.args.replace}")`);
-        } else if (part.toolName === 'MultiEdit') {
-          toolDescription += chalk.gray(` (${part.args.file}: ${part.args.edits.length} edits)`);
+        if (part.toolName === "Edit") {
+          toolDescription += chalk.gray(
+            ` (${part.args.file}: "${part.args.find}" → "${part.args.replace}")`
+          );
+        } else if (part.toolName === "MultiEdit") {
+          toolDescription += chalk.gray(
+            ` (${part.args.file}: ${part.args.edits.length} edits)`
+          );
+        } else if (part.toolName === "Bash") {
+          toolDescription += chalk.gray(` (${part.args.bashCommand})`);
+        } else if (part.toolName === "Read") {
+          toolDescription += chalk.gray(` (${part.args.catArguments})`);
+        } else if (part.toolName === "Write") {
+          toolDescription += chalk.gray(` (${part.args.filePath})`);
+        } else if (part.toolName === "Ls") {
+          toolDescription += chalk.gray(` (${part.args.lsArguments})`);
+        } else if (part.toolName === "Glob") {
+          toolDescription += chalk.gray(` (${part.args.globArguments})`);
+        } else if (part.toolName === "Grep") {
+          toolDescription += chalk.gray(` (${part.args.grepArguments})`);
+        } else if (part.toolName === "WebFetch") {
+          toolDescription += chalk.gray(` (${part.args.url})`);
+        } else if (part.toolName === "WebSearch") {
+          toolDescription += chalk.gray(` ("${part.args.query}")`);
         }
-        return chalk.blue('🔧 ') + toolDescription;
-      
-      case 'tool-result':
+        return chalk.blue("🔧 ") + toolDescription;
+
+      case "tool-result":
         let resultMessage = `${part.toolName} completed`;
-        if (part.toolName === 'Edit' || part.toolName === 'MultiEdit') {
-          resultMessage += part.result.ok ? ' successfully' : ' with errors';
+        if (part.toolName === "Edit" || part.toolName === "MultiEdit") {
+          resultMessage += part.result.ok ? " successfully" : " with errors";
         }
-        return chalk.green('✅ ') + chalk.gray(resultMessage);
-      
-      case 'tool-error':
-        return chalk.red('❌ ') + chalk.red.bold(part.toolName) + 
-               chalk.red(`: ${part.error}`);
-      
-      case 'todos':
+        return chalk.green("✅ ") + chalk.gray(resultMessage);
+
+      case "tool-error":
+        return (
+          chalk.red("❌ ") +
+          chalk.red.bold(part.toolName) +
+          chalk.red(`: ${part.error}`)
+        );
+
+      case "todos":
         if (part.todos && part.todos.length > 0) {
           this.lastTodos = part.todos;
-          return chalk.magenta('📋 Todos Updated:\n') + 
-            part.todos.map(todo => {
-              const statusIcon = todo.status === 'completed' ? '✅' : 
-                               todo.status === 'in_progress' ? '🔄' : '⏳';
-              return `  ${statusIcon} ${todo.description}`;
-            }).join('\n');
+          return (
+            chalk.magenta("📋 Todos Updated:\n") +
+            part.todos
+              .map((todo) => {
+                const statusIcon =
+                  todo.status === "completed"
+                    ? "✅"
+                    : todo.status === "in_progress"
+                    ? "🔄"
+                    : "⏳";
+                return `  ${statusIcon} ${todo.description}`;
+              })
+              .join("\n")
+          );
         }
-        return '';
-      
-      case 'completed':
+        return "";
+
+      case "completed":
         this.lastTodos = part.todos; // Save completed todos
-        return ''; // Don't show completion message
-      
-      case 'finish':
-        return chalk.blue('🏁 ') + chalk.blue('Child session finished') +
-               chalk.gray(` (${part.inputTokens} input, ${part.outputTokens} output tokens)`);
-      
-      case 'error':
-        return chalk.red('💥 ') + chalk.red.bold('Session Error: ') + 
-               chalk.red(part.error);
-      
+        return ""; // Don't show completion message
+
+      case "error":
+        return (
+          chalk.red("💥 ") +
+          chalk.red.bold("Session Error: ") +
+          chalk.red(part.error)
+        );
+
       default:
-        return chalk.gray('📝 ') + JSON.stringify(part, null, 2);
+        return chalk.gray("📝 ") + JSON.stringify(part, null, 2);
     }
   }
 
   async executeAgent(prompt) {
     try {
       this.isAgentRunning = true;
-      
-      // Prepare todos from previous session if available
-      const todos = this.lastTodos && this.lastTodos.length > 0 
-        ? this.lastTodos
-            .filter(todo => todo.status !== 'completed')
-            .map(todo => ({
-              description: todo.description,
-              context: todo.context || 'Continued from previous session',
-              status: todo.status === 'in_progress' ? 'in_progress' : 'pending'
-            }))
-        : undefined;
 
-      this.currentSpinner = ora('🤖 Agent is thinking...').start();
+      // Prepare todos from previous session if available
+
+      this.currentSpinner = ora("🤖 Agent is thinking...").start();
       let hasOutput = false;
 
       // Use the SDK query function
@@ -109,7 +132,7 @@ class AgentChat {
         prompt,
         workingDirectory: process.cwd(),
         maxSteps: 50,
-        todos
+        todos: this.lastTodos,
       })) {
         if (this.currentSpinner) {
           this.currentSpinner.stop();
@@ -125,11 +148,10 @@ class AgentChat {
       }
 
       this.isAgentRunning = false;
-      
+
       if (!hasOutput) {
-        console.log(chalk.green('✨ Agent completed successfully (no output)'));
+        console.log(chalk.green("✨ Agent completed successfully (no output)"));
       }
-      
     } catch (error) {
       if (this.currentSpinner) {
         this.currentSpinner.stop();
@@ -148,22 +170,22 @@ class AgentChat {
     try {
       const answer = await inquirer.prompt([
         {
-          type: 'input',
-          name: 'prompt',
-          message: chalk.cyan('You:'),
+          type: "input",
+          name: "prompt",
+          message: chalk.cyan("You:"),
           validate: (input) => {
-            if (input.trim() === '') {
-              return 'Please enter a prompt';
+            if (input.trim() === "") {
+              return "Please enter a prompt";
             }
             return true;
-          }
-        }
+          },
+        },
       ]);
 
       return answer.prompt.trim();
     } catch (error) {
-      if (error.name === 'ExitPromptError') {
-        return 'exit';
+      if (error.name === "ExitPromptError") {
+        return "exit";
       }
       throw error;
     }
@@ -175,29 +197,34 @@ class AgentChat {
     while (true) {
       try {
         const prompt = await this.promptUser();
-        
-        if (!prompt || prompt.toLowerCase() === 'exit' || prompt.toLowerCase() === 'quit') {
-          console.log(chalk.yellow('\n👋 Goodbye!'));
+
+        if (
+          !prompt ||
+          prompt.toLowerCase() === "exit" ||
+          prompt.toLowerCase() === "quit"
+        ) {
+          console.log(chalk.yellow("\n👋 Goodbye!"));
           process.exit(0);
         }
 
-        console.log(chalk.cyan('\n🚀 Starting agent...\n'));
-        
+        console.log(chalk.cyan("\n🚀 Starting agent...\n"));
+
         await this.executeAgent(prompt);
-        
-        console.log(chalk.green('\n✅ Agent finished. Ready for your next prompt!\n'));
-        
+
+        console.log(
+          chalk.green("\n✅ Agent finished. Ready for your next prompt!\n")
+        );
       } catch (error) {
-        console.error(chalk.red('\n❌ Error:'), error.message);
-        console.log(chalk.yellow('Ready for your next prompt!\n'));
+        console.error(chalk.red("\n❌ Error:"), error.message);
+        console.log(chalk.yellow("Ready for your next prompt!\n"));
       }
     }
   }
 }
 
 // Handle Ctrl+C gracefully
-process.on('SIGINT', () => {
-  console.log(chalk.yellow('\n\n👋 Goodbye!'));
+process.on("SIGINT", () => {
+  console.log(chalk.yellow("\n\n👋 Goodbye!"));
   process.exit(0);
 });
 

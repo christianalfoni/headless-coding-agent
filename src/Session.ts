@@ -51,7 +51,11 @@ export class Session {
     userPrompt: string,
     env: SessionEnvironment,
     parentSession?: Session,
-    initialTodos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[]
+    initialTodos?: {
+      description: string;
+      context: string;
+      status?: "pending" | "in_progress" | "completed";
+    }[]
   ) {
     const session = new Session(userPrompt, env, parentSession, initialTodos);
 
@@ -71,16 +75,25 @@ export class Session {
     userPrompt: string,
     env: SessionEnvironment,
     parentSession?: Session,
-    initialTodos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[]
+    initialTodos?: {
+      description: string;
+      context: string;
+      status?: "pending" | "in_progress" | "completed";
+    }[]
   ) {
     this.sessionId = uuidv4();
     this.userPrompt = userPrompt;
-    this.todos = initialTodos ? initialTodos.map(todo => ({
-      description: todo.description,
-      context: todo.context,
-      status: (todo.status || "pending") as "pending" | "in_progress" | "completed",
-      summary: undefined
-    })) : [];
+    this.todos = initialTodos
+      ? initialTodos.map((todo) => ({
+          description: todo.description,
+          context: todo.context,
+          status: (todo.status || "pending") as
+            | "pending"
+            | "in_progress"
+            | "completed",
+          summary: undefined,
+        }))
+      : [];
     this.env = env;
     this.parentSession = parentSession;
     this.inputTokens = 0;
@@ -132,10 +145,27 @@ export class Session {
         type: "todos" as const,
         todos: structuredClone(this.todos),
         sessionId: this.sessionId,
-        parentSessionId: this.parentSession?.sessionId
+        parentSessionId: this.parentSession?.sessionId,
       };
     }
-    return yield* this.summarizeTodos();
+    const finalText = yield* this.summarizeTodos();
+
+    // If this is a root session (no parent), emit a completed event instead
+    if (!this.parentSession) {
+      const durationMs = Date.now() - this.startTime.getTime();
+      const completedPart: Message = {
+        type: "completed",
+        inputTokens: this.inputTokens,
+        outputTokens: this.outputTokens,
+        stepCount: this.stepCount,
+        durationMs,
+        todos: this.todos,
+        sessionId: this.sessionId,
+      };
+      yield completedPart;
+    }
+
+    return finalText;
   }
 
   async *evaluateTodos(): AsyncGenerator<Message> {
@@ -194,7 +224,7 @@ Please evaluate the current pending todos and provide an updated list of todos n
           type: "todos" as const,
           todos: structuredClone(this.todos),
           sessionId: this.sessionId,
-          parentSessionId: this.parentSession?.sessionId
+          parentSessionId: this.parentSession?.sessionId,
         };
       } else {
         yield part;
@@ -202,9 +232,7 @@ Please evaluate the current pending todos and provide an updated list of todos n
     }
   }
 
-  async *executeTodo(
-    todo: Todo
-  ): AsyncGenerator<Message, string> {
+  async *executeTodo(todo: Todo): AsyncGenerator<Message, string> {
     const systemPrompt = `You are an AI assistant that executes todos. You have been given a specific todo to accomplish. Execute the todo using the available tools.
 
 Working directory: ${this.env.workingDirectory}
@@ -258,7 +286,7 @@ The user should handle running and reviewing long-running processes themselves.`
         type: "todos" as const,
         todos: structuredClone(this.todos),
         sessionId: this.sessionId,
-        parentSessionId: this.parentSession?.sessionId
+        parentSessionId: this.parentSession?.sessionId,
       };
 
       // Execute the todo as a prompt in the child session
@@ -275,10 +303,13 @@ The user should handle running and reviewing long-running processes themselves.`
         type: "todos" as const,
         todos: structuredClone(this.todos),
         sessionId: this.sessionId,
-        parentSessionId: this.parentSession?.sessionId
+        parentSessionId: this.parentSession?.sessionId,
       };
 
-      yield* this.evaluateTodos();
+      // Only re-evaluate todos if there are still pending ones
+      if (this.todos.some((todo) => todo.status === "pending")) {
+        yield* this.evaluateTodos();
+      }
     }
   }
 
