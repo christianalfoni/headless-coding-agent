@@ -26,6 +26,8 @@ Only use this tool for short-lived commands like:
 - Linters and type checkers (npm run lint, npm run typecheck)
 - Git operations
 
+NEVER execute processes that require user validation, rather explain to the user what process needs to be run to validate.
+
 Running on ${os.platform()}.`,
   inputSchema: inputSchema as any,
   execute: async (params: any) => {
