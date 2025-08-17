@@ -3,7 +3,6 @@
 // Base session info that we add to all messages
 export interface SessionInfo {
   sessionId: string;
-  parentSessionId?: string;
 }
 
 // Individual message types that compose SessionInfo
@@ -319,7 +318,6 @@ export type Message =
 // Session interface
 export interface Session {
   sessionId: string;
-  parentSession?: { sessionId: string };
   env: {
     model: any; // AI model instance
   };

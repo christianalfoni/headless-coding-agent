@@ -1,5 +1,6 @@
 import { Session } from "./Session";
 import { SessionEnvironment } from "./Environment";
+import { Todo } from "./types";
 
 export interface QueryOptions {
   prompt: string;
@@ -10,7 +11,7 @@ export interface QueryOptions {
    */
   maxSteps?: number;
   model?: string;
-  todos?: { description: string; context: string; status?: "pending" | "in_progress" | "completed" }[];
+  todos?: Todo[];
 }
 
 export async function* query(options: QueryOptions) {
@@ -20,10 +21,14 @@ export async function* query(options: QueryOptions) {
     options.maxSteps ?? 50,
     options.model
   );
-  return yield* Session.create(options.prompt, context, undefined, options.todos);
+  return yield* Session.create(
+    options.prompt,
+    context,
+    options.todos
+  );
 }
 
 // Re-export all types for SDK usage
-export * from './types';
-export { Session } from './Session';
-export { SessionEnvironment } from './Environment';
+export * from "./types";
+export { Session } from "./Session";
+export { SessionEnvironment } from "./Environment";

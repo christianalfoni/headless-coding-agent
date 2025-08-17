@@ -1,45 +1,83 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import * as os from "os";
 
-const execAsync = promisify(exec);
-
 const inputSchema = z.object({
-  bashCommand: z.string().describe("The complete command to execute in bash shell")
+  bashCommand: z
+    .string()
+    .describe("The complete command to execute in bash shell"),
 });
 
 export const Bash = tool({
-  description: `Execute commands in a bash shell. Input should be the full command to run (e.g., 'head -n 1 file.txt', 'ls -la', 'grep pattern file'). 
-
-IMPORTANT: This tool should NOT be used for long-running or persistent processes such as:
-- Development servers (npm run dev, yarn start, etc.)
-- Build watchers (npm run watch)
-- Deploy scripts
-- Any process that doesn't terminate quickly
-
-Only use this tool for short-lived commands like:
-- File operations (ls, cat, head, tail)
-- One-time builds (npm run build)
-- Tests (npm test)
-- Linters and type checkers (npm run lint, npm run typecheck)
-- Git operations
-
-NEVER execute processes that require user validation, rather explain to the user what process needs to be run to validate.
-
-Running on ${os.platform()}.`,
+  description: `Execute commands in a bash shell. Input should be the full command to run (e.g., 'head -n 1 file.txt', 'ls -la', 'grep pattern file'). Running on ${os.platform()}.`,
   inputSchema: inputSchema as any,
   execute: async (params: any) => {
-    const args = params.bashCommand;
-    const command = args || `bash`;
+    const command = params.bashCommand || "bash";
 
-    const options: any = {};
-    const { stdout, stderr } = await execAsync(command, options);
+    return new Promise((resolve, reject) => {
+      const child = spawn("bash", ["-c", command]);
 
-    return {
-      stdout: stdout?.toString() || stderr?.toString() || "",
-      stderr: stderr?.toString() || undefined,
-    };
+      let stdout = "";
+      let stderr = "";
+      let lastOutputTime = Date.now();
+      const OUTPUT_TIMEOUT = 10000; // 10 seconds with no output
+      const MAX_EXECUTION_TIME = 60000; // 60 seconds max total
+
+      // Monitor for output timeout
+      const outputTimeoutId = setInterval(() => {
+        const timeSinceLastOutput = Date.now() - lastOutputTime;
+        if (timeSinceLastOutput > OUTPUT_TIMEOUT) {
+          clearInterval(outputTimeoutId);
+          child.kill("SIGTERM");
+          reject(
+            new Error(
+              `Command appears to be a persistent process (no output for ${
+                OUTPUT_TIMEOUT / 1000
+              } seconds). Do not run long-running processes like dev servers, rather inform the user to run it during review`
+            )
+          );
+        }
+      }, 1000);
+
+      // Hard timeout
+      const maxTimeoutId = setTimeout(() => {
+        clearInterval(outputTimeoutId);
+        child.kill("SIGTERM");
+        reject(
+          new Error(
+            `Command exceeded maximum execution time of ${
+              MAX_EXECUTION_TIME / 1000
+            } seconds. Please run long-running processes manually.`
+          )
+        );
+      }, MAX_EXECUTION_TIME);
+
+      child.stdout?.on("data", (data) => {
+        stdout += data.toString();
+        lastOutputTime = Date.now();
+      });
+
+      child.stderr?.on("data", (data) => {
+        stderr += data.toString();
+        lastOutputTime = Date.now();
+      });
+
+      child.on("close", () => {
+        clearInterval(outputTimeoutId);
+        clearTimeout(maxTimeoutId);
+
+        resolve({
+          stdout: stdout || stderr || "",
+          stderr: stderr || undefined,
+        });
+      });
+
+      child.on("error", (error) => {
+        clearInterval(outputTimeoutId);
+        clearTimeout(maxTimeoutId);
+        reject(error);
+      });
+    });
   },
 });

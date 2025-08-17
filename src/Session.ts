@@ -16,33 +16,19 @@ import { WebSearch } from "./tools/webSearch";
 
 const getSystemPrompt = (
   workingDirectory: string
-) => `You are an AI assistant that helps users accomplish their goals by managing todos. You are working in: ${workingDirectory}
+) => `You are an AI assistant that breaks down user requests into isolated development todos. You are working in: ${workingDirectory}
 
-Your task is to evaluate the current state of todos and provide an updated list of pending todos needed to complete the user's request.
+Your task is to evaluate the current state and create a list of isolated, scoped todos that can be executed step by step, building on each other.
 
-Context provided:
-- Completed todos: These tasks have already been accomplished. Review their results to understand what has been done.
-- Pending todos: These are tasks that still need to be completed or re-evaluated.
+Guidelines for creating todos:
+- Each todo should be a complete, self-contained unit of work
+- Todos should build on each other sequentially 
+- Make todos specific and actionable with clear deliverables
+- Break complex requests into logical, isolated development steps
+- Each todo should have a single clear purpose and outcome
+- Consider what has been completed and what still needs to be done
 
-When evaluating todos:
-- Consider what has already been completed and its results
-- Determine if pending todos are still relevant or need modification
-- Add new todos if additional steps are needed based on completed work
-- Remove or modify todos that are no longer necessary
-- PREFER creating broader, consolidated todos that encompass multiple related actions
-- Only break down requests into multiple todos for genuinely complex tasks that require distinct phases
-- Most requests should result in a single comprehensive todo
-- For simple questions or requests, a single "Answer the question" todo is perfectly fine
-- Focus on practical, executable todos that can be accomplished with available tools
-
-Todo Scoping Based on Tool Call Complexity:
-- Available tools: bash, edit, glob, grep, ls, read, webSearch, webFetch
-- Scope todos around meaningful outcomes, not individual tool calls
-- Low complexity (1-3 tool calls): Create specific, granular todos for direct operations
-- Medium complexity (4-8 tool calls): Group related searches, investigations, and edits into single todos
-- High complexity (9+ tool calls): Break into logical phases representing complete subtasks
-- Focus on final results rather than intermediate steps - many tool calls create irrelevant context
-- Each todo should represent a complete unit of work where the end result matters for future context
+IMPORTANT: When creating todos that involve testing (running tests, checking builds, verifying functionality), always specify that testing must be done using the Bash tool. The Bash tool can execute commands and run test suites, but cannot run long-running processes like development servers, build watchers, or deploy scripts.
 
 Always use the WriteTodos tool to provide the updated list of pending todos needed to complete the user's request.`;
 
@@ -50,21 +36,15 @@ export class Session {
   static async *create(
     userPrompt: string,
     env: SessionEnvironment,
-    parentSession?: Session,
-    initialTodos?: {
-      description: string;
-      context: string;
-      status?: "pending" | "in_progress" | "completed";
-    }[]
+    initialTodos?: Todo[]
   ) {
-    const session = new Session(userPrompt, env, parentSession, initialTodos);
+    const session = new Session(userPrompt, env, initialTodos);
 
     return yield* session.exec();
   }
   public readonly sessionId: string;
   public todos: Todo[];
   public env: SessionEnvironment;
-  public parentSession?: Session;
   public inputTokens: number;
   public outputTokens: number;
   public stepCount: number;
@@ -74,28 +54,12 @@ export class Session {
   constructor(
     userPrompt: string,
     env: SessionEnvironment,
-    parentSession?: Session,
-    initialTodos?: {
-      description: string;
-      context: string;
-      status?: "pending" | "in_progress" | "completed";
-    }[]
+    initialTodos?: Todo[]
   ) {
     this.sessionId = uuidv4();
     this.userPrompt = userPrompt;
-    this.todos = initialTodos
-      ? initialTodos.map((todo) => ({
-          description: todo.description,
-          context: todo.context,
-          status: (todo.status || "pending") as
-            | "pending"
-            | "in_progress"
-            | "completed",
-          summary: undefined,
-        }))
-      : [];
+    this.todos = initialTodos ? initialTodos : [];
     this.env = env;
-    this.parentSession = parentSession;
     this.inputTokens = 0;
     this.outputTokens = 0;
     this.stepCount = 0;
@@ -104,66 +68,39 @@ export class Session {
 
   step(): void {
     this.stepCount++;
-    if (this.parentSession) {
-      this.parentSession.step();
-    } else {
-      // Only check maxSteps on root session (no parent)
-      if (this.env.maxSteps && this.stepCount > this.env.maxSteps) {
-        throw new Error(
-          `Maximum steps exceeded: ${this.stepCount}/${this.env.maxSteps}`
-        );
-      }
+    if (this.env.maxSteps && this.stepCount > this.env.maxSteps) {
+      throw new Error(
+        `Maximum steps exceeded: ${this.stepCount}/${this.env.maxSteps}`
+      );
     }
   }
 
   increaseTokens(inputTokens: number, outputTokens: number): void {
     this.inputTokens += inputTokens;
     this.outputTokens += outputTokens;
-    if (this.parentSession) {
-      this.parentSession.increaseTokens(inputTokens, outputTokens);
-    }
   }
 
   getMaxSteps(): number | undefined {
-    // Get the root session's maxSteps
-    let rootSession: Session = this;
-    while (rootSession.parentSession) {
-      rootSession = rootSession.parentSession;
-    }
-    return rootSession.env.maxSteps;
+    return this.env.maxSteps;
   }
 
   async *exec(): AsyncGenerator<Message> {
     yield* this.evaluateTodos();
-    if (this.todos.length > 1) {
-      yield* this.delegateTodos();
-    } else if (this.todos[0]) {
-      const summary = yield* this.executeTodo(this.todos[0]);
-      this.todos[0].status = "completed";
-      this.todos[0].summary = summary;
-      yield {
-        type: "todos" as const,
-        todos: structuredClone(this.todos),
-        sessionId: this.sessionId,
-        parentSessionId: this.parentSession?.sessionId,
-      };
-    }
+    yield* this.delegateTodos();
+
     const finalText = yield* this.summarizeTodos();
 
-    // If this is a root session (no parent), emit a completed event instead
-    if (!this.parentSession) {
-      const durationMs = Date.now() - this.startTime.getTime();
-      const completedPart: Message = {
-        type: "completed",
-        inputTokens: this.inputTokens,
-        outputTokens: this.outputTokens,
-        stepCount: this.stepCount,
-        durationMs,
-        todos: this.todos,
-        sessionId: this.sessionId,
-      };
-      yield completedPart;
-    }
+    const durationMs = Date.now() - this.startTime.getTime();
+    const completedPart: Message = {
+      type: "completed",
+      inputTokens: this.inputTokens,
+      outputTokens: this.outputTokens,
+      stepCount: this.stepCount,
+      durationMs,
+      todos: this.todos,
+      sessionId: this.sessionId,
+    };
+    yield completedPart;
 
     return finalText;
   }
@@ -176,21 +113,17 @@ export class Session {
 
     const completedTodosContext =
       completedTodos.length > 0
-        ? `Completed todos:\n${completedTodos
-            .map(
-              (todo, index) =>
-                `${index + 1}. ${todo.description}${
-                  todo.summary ? `\n   Result: ${todo.summary}` : ""
-                }`
-            )
-            .join("\n")}`
+        ? `Completed todos with summaries:\n${JSON.stringify(
+            completedTodos.map((todo) => ({
+              description: todo.description,
+              summary: todo.summary,
+            }))
+          )}`
         : "";
 
     const pendingTodosContext =
       pendingTodos.length > 0
-        ? `Current pending todos:\n${pendingTodos
-            .map((todo, index) => `${index + 1}. ${todo.description}`)
-            .join("\n")}`
+        ? `Current pending todos:\n${JSON.stringify(pendingTodos)}`
         : "";
 
     const context = [completedTodosContext, pendingTodosContext]
@@ -199,7 +132,7 @@ export class Session {
 
     const prompt = `${this.userPrompt}${context ? `\n\n${context}` : ""}
 
-Please evaluate the current pending todos and provide an updated list of todos needed to complete the request.`;
+Please evaluate the current pending todos based on what has been completed (including their summaries) and provide an updated list of todos needed to complete the request.`;
 
     const stream = streamPrompt({
       session: this,
@@ -224,7 +157,6 @@ Please evaluate the current pending todos and provide an updated list of todos n
           type: "todos" as const,
           todos: structuredClone(this.todos),
           sessionId: this.sessionId,
-          parentSessionId: this.parentSession?.sessionId,
         };
       } else {
         yield part;
@@ -237,7 +169,11 @@ Please evaluate the current pending todos and provide an updated list of todos n
 
 Working directory: ${this.env.workingDirectory}
 
-IMPORTANT: Before using any tools, determine if this todo can be answered from your existing knowledge:
+CRITICAL: You must ONLY do what is described in the todo. Do not go beyond the scope of the todo description. Do not add extra features, improvements, or related work unless explicitly mentioned in the todo itself.
+
+IMPORTANT: When the todo is ambiguous, ask for clarification rather than making assumptions. Prefer conservative, minimal actions over comprehensive solutions. Focus strictly on the described task and nothing more.
+
+Before using any tools, determine if this todo can be answered from your existing knowledge:
 - For questions about concepts, explanations, best practices, or general knowledge: Answer directly without using tools
 - For questions requiring current/specific information about the codebase: Use Read, Grep, or Glob to investigate
 - For tasks requiring modifications: Use Edit, Write, or MultiEdit
@@ -252,19 +188,18 @@ Only use tools when you actually need to:
 
 If you can confidently answer the question from your knowledge without needing to access files or run commands, do so directly.
 
-When using the bash tool, avoid running long-running or persistent processes such as:
+When using the bash tool, NEVER run long-running or persistent processes such as:
 - Development servers (npm run dev, yarn start, etc.)
 - Build watchers (npm run watch) 
 - Deploy scripts
-- Any process that doesn't terminate quickly
+- Any process that requires user interaction
 
-These processes will cause the execution to hang indefinitely. Instead, focus on tasks like:
-- Running tests, linters, and type checkers
-- One-time builds
-- File operations and Git commands
-- Analysis and inspection tasks
-
-NEVER execute processes that require user validation, rather explain to the user what process needs to be run to validate. The user should handle running and reviewing long-running processes themselves.`;
+IMPORTANT: When you complete your task, always provide a clear summary of what was accomplished, including:
+- A brief description of the actions taken
+- References to any files that were modified, created, or analyzed using the format "file_path:line_number" when specific lines are relevant
+- Any important findings or results from your work
+This helps users understand exactly what was done and easily navigate to relevant code locations.
+`;
 
     return yield* streamPrompt({
       session: this,
@@ -299,15 +234,10 @@ NEVER execute processes that require user validation, rather explain to the user
         type: "todos" as const,
         todos: structuredClone(this.todos),
         sessionId: this.sessionId,
-        parentSessionId: this.parentSession?.sessionId,
       };
 
       // Execute the todo as a prompt in the child session
-      const text = yield* Session.create(
-        pendingTodo.description,
-        this.env,
-        this
-      );
+      const text = yield* this.executeTodo(pendingTodo);
 
       // Mark todo as completed
       pendingTodo.status = "completed";
@@ -316,7 +246,6 @@ NEVER execute processes that require user validation, rather explain to the user
         type: "todos" as const,
         todos: structuredClone(this.todos),
         sessionId: this.sessionId,
-        parentSessionId: this.parentSession?.sessionId,
       };
 
       // Only re-evaluate todos if there are still pending ones
@@ -327,15 +256,9 @@ NEVER execute processes that require user validation, rather explain to the user
   }
 
   async *summarizeTodos(): AsyncGenerator<Message, string> {
-    const completedTodos = this.todos
-      .filter((todo) => todo.status === "completed")
-      .map(
-        (todo, index) =>
-          `${index + 1}. ${todo.description}${
-            todo.summary ? `\n   Result: ${todo.summary}` : ""
-          }`
-      )
-      .join("\n");
+    const completedTodos = this.todos.filter(
+      (todo) => todo.status === "completed"
+    );
 
     const systemPrompt = `You are an AI assistant answering the following user request: "${this.userPrompt}"
 
@@ -346,7 +269,7 @@ Your purpose is to provide a final answer to this request. You have been given t
 IMPORTANT: Describe what HAS BEEN DONE, not what WILL BE DONE. Use past tense when describing the actions and results. Focus on directly addressing what the user asked for based on the completed work, not on describing the todos themselves.`;
 
     const prompt = completedTodos
-      ? `Completed todos for context:\n${completedTodos}`
+      ? `Completed todos for context:\n${JSON.stringify(completedTodos)}`
       : "No todos were completed.";
 
     return yield* streamPrompt({

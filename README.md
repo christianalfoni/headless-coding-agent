@@ -21,7 +21,7 @@ A headless AI coding agent that autonomously executes development tasks through 
 ## Features
 
 - **Autonomous Task Execution**: Breaks down complex requests into manageable todos and executes them systematically
-- **Session Management**: Hierarchical session system with parent-child relationships for complex task delegation
+- **Session Management**: Autonomous session system for complex task execution
 - **Tool Integration**: Comprehensive file system operations, web search, and bash command execution
 - **Streaming JSON Output**: Real-time progress updates through structured JSON messages
 - **Session Continuation**: Resume interrupted sessions with todo state preservation
@@ -280,7 +280,6 @@ All messages compose a base `SessionInfo` interface with specific message data:
 ```typescript
 interface SessionInfo {
   sessionId: string;
-  parentSessionId?: string;
 }
 
 type Message =
@@ -304,8 +303,7 @@ AI-generated text output:
 {
   "type": "text",
   "text": "I'm analyzing your TypeScript configuration...",
-  "sessionId": "uuid-1234",
-  "parentSessionId": "uuid-parent"
+  "sessionId": "uuid-1234"
 }
 ```
 
@@ -560,7 +558,7 @@ The error handling system automatically catches exceptions thrown by tools and c
 
 #### CompletedMessage
 
-Root session completion (no parent session):
+Session completion:
 
 ```json
 {

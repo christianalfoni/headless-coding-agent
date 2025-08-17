@@ -6,12 +6,24 @@ import chalk from "chalk";
 import ora from "ora";
 import boxen from "boxen";
 import process from "process";
+import fs from "fs";
 
 class AgentChat {
   constructor() {
     this.isAgentRunning = false;
     this.lastTodos = null;
     this.currentSpinner = null;
+    this.logFileName = `../agent-chat-${
+      new Date().toISOString().split("T")[0]
+    }.log`;
+  }
+
+  logMessage(message) {
+    try {
+      fs.appendFileSync(this.logFileName, message + "\n\n", "utf8");
+    } catch (error) {
+      console.error("Failed to write to log file:", error.message);
+    }
   }
 
   displayWelcome() {
@@ -130,8 +142,9 @@ class AgentChat {
       // Use the SDK query function
       for await (const part of query({
         prompt,
+        // model: "together/openai/gpt-oss-120b",
         workingDirectory: process.cwd(),
-        maxSteps: 50,
+        maxSteps: 200,
         todos: this.lastTodos,
       })) {
         if (this.currentSpinner) {
@@ -145,6 +158,9 @@ class AgentChat {
           console.log(formatted);
           console.log(); // Add line break between messages
         }
+
+        // Log the raw JSON message
+        this.logMessage(JSON.stringify(part, null, 2));
       }
 
       this.isAgentRunning = false;

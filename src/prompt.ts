@@ -28,7 +28,6 @@ export async function* streamPrompt(config: {
       part.type;
       const sessionInfo = {
         sessionId: config.session.sessionId,
-        parentSessionId: config.session.parentSession?.sessionId,
       };
 
       // Ignore general stream control events
@@ -62,7 +61,7 @@ export async function* streamPrompt(config: {
           ...sessionInfo,
         };
         yield textPart;
-        finalTextOutput += textBuffer; // Add to final output
+        finalTextOutput = textBuffer; // Store as final output (only the last one)
         textBuffer = ""; // Reset buffer
         continue;
       }
