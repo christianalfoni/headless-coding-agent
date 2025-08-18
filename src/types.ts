@@ -320,6 +320,7 @@ export interface Session {
   sessionId: string;
   env: {
     model: any; // AI model instance
+    planningModel: any; // AI model instance for planning/evaluation
   };
   todos: Todo[];
   stepCount: number;

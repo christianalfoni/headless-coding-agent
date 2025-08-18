@@ -8,6 +8,7 @@ function parseArgs() {
   let format = false;
   let maxSteps: number | undefined;
   let model: string | undefined;
+  let planningModel: string | undefined;
   let initialTodos: Todo[] | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -25,6 +26,9 @@ function parseArgs() {
       i++; // Skip the next argument
     } else if (args[i] === "--model" && i + 1 < args.length) {
       model = args[i + 1];
+      i++; // Skip the next argument
+    } else if (args[i] === "--planningModel" && i + 1 < args.length) {
+      planningModel = args[i + 1];
       i++; // Skip the next argument
     } else if (args[i] === "--todos" && i + 1 < args.length) {
       try {
@@ -63,7 +67,7 @@ function parseArgs() {
 
   if (!prompt) {
     console.error(
-      'Usage: agent --prompt "your prompt here" [--format] [--maxSteps <number>] [--model <string>] [--todos <json>]'
+      'Usage: agent --prompt "your prompt here" [--format] [--maxSteps <number>] [--model <string>] [--planningModel <string>] [--todos <json>]'
     );
     console.error("  --prompt: prompt to send to the agent");
     console.error("  --format: format JSON output (pretty print)");
@@ -74,23 +78,27 @@ function parseArgs() {
       "  --model: AI model to use (default: anthropic/claude-3-5-sonnet-20241022)"
     );
     console.error(
+      "  --planningModel: AI model to use for planning/evaluating todos (defaults to main model)"
+    );
+    console.error(
       "  --todos: JSON array of initial todos for session continuation"
     );
     process.exit(1);
   }
 
-  return { prompt, format, maxSteps, model, initialTodos };
+  return { prompt, format, maxSteps, model, planningModel, initialTodos };
 }
 
 async function main() {
   try {
-    const { prompt, format, maxSteps, model, initialTodos } = parseArgs();
+    const { prompt, format, maxSteps, model, planningModel, initialTodos } = parseArgs();
 
     const stream = query({
       prompt,
       workingDirectory: process.cwd(),
       maxSteps,
       model,
+      planningModel,
       todos: initialTodos,
     });
 

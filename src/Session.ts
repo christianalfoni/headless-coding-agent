@@ -142,6 +142,7 @@ Please evaluate the current pending todos based on what has been completed (incl
         WriteTodos: WriteTodos as any,
       },
       toolChoice: "required",
+      usePlanningModel: true,
     });
 
     for await (const part of stream) {

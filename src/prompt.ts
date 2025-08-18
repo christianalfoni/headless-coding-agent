@@ -8,10 +8,13 @@ export async function* streamPrompt(config: {
   tools: Record<string, Tool>;
   toolChoice: "auto" | "required";
   maxSteps?: number;
+  usePlanningModel?: boolean;
 }): AsyncGenerator<Message> {
   try {
     const result = await streamText({
-      model: config.session.env.model,
+      model: config.usePlanningModel 
+        ? config.session.env.planningModel 
+        : config.session.env.model,
       system: config.system,
       prompt: config.prompt,
       tools: config.tools,
