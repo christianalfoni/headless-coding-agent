@@ -27,8 +27,8 @@ Guidelines for creating todos:
 - Break complex requests into logical, isolated development steps
 - Each todo should have a single clear purpose and outcome
 - Consider what has been completed and what still needs to be done
-
-IMPORTANT: When creating todos that involve testing (running tests, checking builds, verifying functionality), always specify that testing must be done using the Bash tool. The Bash tool can execute commands and run test suites, but cannot run long-running processes like development servers, build watchers, or deploy scripts.
+- NEVER create testing, verification, or validation todos - each todo must handle its own testing internally
+- AVOID todos like "run tests", "verify changes", "check functionality" - these are not separate tasks
 
 Always use the WriteTodos tool to provide the updated list of pending todos needed to complete the user's request.`;
 
@@ -132,7 +132,9 @@ export class Session {
 
     const prompt = `${this.userPrompt}${context ? `\n\n${context}` : ""}
 
-Please evaluate the current pending todos based on what has been completed (including their summaries) and provide an updated list of todos needed to complete the request.`;
+Please evaluate the current pending todos based on what has been completed (including their summaries) and provide an updated list of todos needed to complete the request.
+
+IMPORTANT: Do not create testing todos. Each todo will handle its own verification internally.`;
 
     const stream = streamPrompt({
       session: this,
@@ -166,11 +168,22 @@ Please evaluate the current pending todos based on what has been completed (incl
   }
 
   async *executeTodo(todo: Todo): AsyncGenerator<Message, string> {
+    const remainingPendingTodos = this.todos.filter(
+      (t) => t.status === "pending"
+    );
+
+    const remainingTodosContext =
+      remainingPendingTodos.length > 0
+        ? `\n\nRemaining pending todos (do NOT implement these - they will be handled separately):\n${remainingPendingTodos
+            .map((t) => `- ${t.description}`)
+            .join("\n")}`
+        : "";
+
     const systemPrompt = `You are an AI assistant that executes todos. You have been given a specific todo to accomplish.
 
 Working directory: ${this.env.workingDirectory}
 
-CRITICAL: You must ONLY do what is described in the todo. Do not go beyond the scope of the todo description. Do not add extra features, improvements, or related work unless explicitly mentioned in the todo itself.
+CRITICAL: You must ONLY do what is described in the todo. Do not go beyond the scope of the todo description. Do not add extra features, improvements, or related work unless explicitly mentioned in the todo itself.${remainingTodosContext}
 
 IMPORTANT: When the todo is ambiguous, ask for clarification rather than making assumptions. Prefer conservative, minimal actions over comprehensive solutions. Focus strictly on the described task and nothing more.
 
@@ -194,6 +207,8 @@ When using the bash tool, NEVER run long-running or persistent processes such as
 - Build watchers (npm run watch) 
 - Deploy scripts
 - Any process that requires user interaction
+
+TESTING: After making significant code changes (new functionality, bug fixes, refactoring), consider running relevant tests or build commands to verify the changes work correctly. Use the Bash tool for testing when appropriate, but avoid excessive testing for trivial changes like text updates, comments, or documentation.
 
 IMPORTANT: When you complete your task, always provide a clear summary of what was accomplished, including:
 - A brief description of the actions taken

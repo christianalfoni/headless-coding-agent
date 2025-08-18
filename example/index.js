@@ -43,6 +43,19 @@ class AgentChat {
     );
   }
 
+  truncateInput(input, maxLines = 4) {
+    if (typeof input !== 'string') {
+      input = JSON.stringify(input);
+    }
+    const lines = input.split('\n');
+    if (lines.length > maxLines) {
+      const truncated = lines.slice(0, maxLines).join('\n');
+      const remainingLines = lines.length - maxLines;
+      return `${truncated}\n...+ ${remainingLines} lines`;
+    }
+    return input;
+  }
+
   formatAgentOutput(part) {
     switch (part.type) {
       case "text":
@@ -54,25 +67,32 @@ class AgentChat {
       case "tool-call":
         let toolDescription = chalk.blue.bold(part.toolName);
         if (part.toolName === "Edit") {
+          const findText = this.truncateInput(part.args.find);
+          const replaceText = this.truncateInput(part.args.replace);
           toolDescription += chalk.gray(
-            ` (${part.args.file}: "${part.args.find}" → "${part.args.replace}")`
+            ` (${part.args.file}: "${findText}" → "${replaceText}")`
           );
         } else if (part.toolName === "MultiEdit") {
           toolDescription += chalk.gray(
             ` (${part.args.file}: ${part.args.edits.length} edits)`
           );
         } else if (part.toolName === "Bash") {
-          toolDescription += chalk.gray(` (${part.args.bashCommand})`);
+          const command = this.truncateInput(part.args.bashCommand);
+          toolDescription += chalk.gray(` (${command})`);
         } else if (part.toolName === "Read") {
-          toolDescription += chalk.gray(` (${part.args.catArguments})`);
+          const args = this.truncateInput(part.args.catArguments);
+          toolDescription += chalk.gray(` (${args})`);
         } else if (part.toolName === "Write") {
           toolDescription += chalk.gray(` (${part.args.filePath})`);
         } else if (part.toolName === "Ls") {
-          toolDescription += chalk.gray(` (${part.args.lsArguments})`);
+          const args = this.truncateInput(part.args.lsArguments);
+          toolDescription += chalk.gray(` (${args})`);
         } else if (part.toolName === "Glob") {
-          toolDescription += chalk.gray(` (${part.args.globArguments})`);
+          const args = this.truncateInput(part.args.globArguments);
+          toolDescription += chalk.gray(` (${args})`);
         } else if (part.toolName === "Grep") {
-          toolDescription += chalk.gray(` (${part.args.grepArguments})`);
+          const args = this.truncateInput(part.args.grepArguments);
+          toolDescription += chalk.gray(` (${args})`);
         } else if (part.toolName === "WebFetch") {
           toolDescription += chalk.gray(` (${part.args.url})`);
         } else if (part.toolName === "WebSearch") {
