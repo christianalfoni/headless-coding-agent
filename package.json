@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "agent": "./dist/cli.js"
+    "coding-agent": "./dist/cli.js"
   },
   "exports": {
     ".": {
