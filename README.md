@@ -31,13 +31,13 @@ A headless AI coding agent that autonomously executes development tasks through 
 ### Installation
 
 ```bash
-npm install headless-code
+npm install headless-coding-agent
 ```
 
 ### Basic Usage
 
 ```javascript
-import { query } from "headless-code";
+import { query } from "headless-coding-agent";
 
 async function main() {
   const options = {
@@ -107,28 +107,28 @@ for await (const part of query({
 ### Installation
 
 ```bash
-npm install -g headless-code
+npm install -g headless-coding-agent
 # or
-npx headless-code --prompt "your prompt here"
+npx headless-coding-agent --prompt "your prompt here"
 ```
 
 ### Basic Usage
 
 ```bash
 # Simple task execution
-agent --prompt "Add TypeScript to this JavaScript project"
+coding-agent --prompt "Add TypeScript to this JavaScript project"
 
 # With formatted output
-agent --prompt "Refactor this component to use hooks" --format
+coding-agent --prompt "Refactor this component to use hooks" --format
 
 # With step limit
-agent --prompt "Debug the authentication flow" --maxSteps 20
+coding-agent --prompt "Debug the authentication flow" --maxSteps 20
 
 # With specific model
-agent --prompt "Refactor this code" --model "openai/gpt-4o"
+coding-agent --prompt "Refactor this code" --model "openai/gpt-4o"
 
 # Resume session with todos
-agent --prompt "Continue implementation" --todos '[{"description":"Setup database schema","context":"Database foundation needed for user data","status":"completed"},{"description":"Implement API endpoints","context":"Backend services required for frontend integration"}]'
+coding-agent --prompt "Continue implementation" --todos '[{"description":"Setup database schema","context":"Database foundation needed for user data","status":"completed"},{"description":"Implement API endpoints","context":"Backend services required for frontend integration"}]'
 ```
 
 ### CLI Options
@@ -192,7 +192,7 @@ TOGETHER_AI_API_KEY=your_together_key_here
 ### Using Models in Code
 
 ```javascript
-import { query } from "headless-code";
+import { query } from "headless-coding-agent";
 
 // Use different providers for different tasks
 const options = {
@@ -206,27 +206,17 @@ for await (const part of query(options)) {
 }
 ```
 
-## Sessions and Execution
+## Session and Execution
 
-### Session Hierarchy
+### Session
 
-The system uses a hierarchical session model:
-
-```
-Root Session (user prompt)
-├── Todo Evaluation Session
-├── Todo Execution Session 1
-│   └── Child Session (if delegation needed)
-└── Todo Execution Session 2
-    ├── Child Session A
-    └── Child Session B
-```
+Each prompt from a user creates a session. The session is responsible for tracking the state of the execution.
 
 ### Execution Flow
 
 1. **Todo Evaluation**: AI analyzes the prompt and creates/updates todo list
-2. **Task Delegation**: For multiple todos, creates child sessions for each
-3. **Todo Execution**: Individual todos executed with available tools
+2. **Todo Execution**: Individual todos executed with available tools
+3. **Todo Evaluation**: Each completed todo runs a new evaluation of remaining todos
 4. **Summarization**: Final results compiled and presented
 
 ### Session Environment
