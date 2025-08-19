@@ -1,11 +1,15 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
+import { createAnthropic, AnthropicProviderOptions } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { createMistral } from "@ai-sdk/mistral";
 import { createXai } from "@ai-sdk/xai";
 import { createTogetherAI } from "@ai-sdk/togetherai";
+import { JSONValue, LanguageModel } from "ai";
 
-export function createModel(modelId?: string) {
+export function createProvider(modelId?: string): {
+  options: Record<string, Record<string, JSONValue>>;
+  model: LanguageModel;
+} {
   // Default to Claude 3.5 Sonnet if no model specified
   const model = modelId || "anthropic/claude-sonnet-4-20250514";
 
@@ -27,7 +31,14 @@ export function createModel(modelId?: string) {
           "ANTHROPIC_API_KEY environment variable is required for Anthropic models"
         );
       }
-      return createAnthropic({ apiKey: anthropicApiKey })(modelName);
+      return {
+        model: createAnthropic({ apiKey: anthropicApiKey })(modelName),
+        options: {
+          anthropic: {
+            thinking: { type: "enabled", budgetTokens: 12000 },
+          } satisfies AnthropicProviderOptions,
+        },
+      };
 
     case "openai":
       const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -36,7 +47,11 @@ export function createModel(modelId?: string) {
           "OPENAI_API_KEY environment variable is required for OpenAI models"
         );
       }
-      return createOpenAI({ apiKey: openaiApiKey })(modelName);
+
+      return {
+        model: createOpenAI({ apiKey: openaiApiKey })(modelName),
+        options: {},
+      };
 
     case "google":
       const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -45,7 +60,10 @@ export function createModel(modelId?: string) {
           "GOOGLE_GENERATIVE_AI_API_KEY environment variable is required for Google models"
         );
       }
-      return google(modelName);
+      return {
+        model: google(modelName),
+        options: {},
+      };
 
     case "mistral":
       const mistralApiKey = process.env.MISTRAL_API_KEY;
@@ -54,7 +72,10 @@ export function createModel(modelId?: string) {
           "MISTRAL_API_KEY environment variable is required for Mistral models"
         );
       }
-      return createMistral({ apiKey: mistralApiKey })(modelName);
+      return {
+        model: createMistral({ apiKey: mistralApiKey })(modelName),
+        options: {},
+      };
 
     case "xai":
       const xaiApiKey = process.env.XAI_API_KEY;
@@ -63,7 +84,10 @@ export function createModel(modelId?: string) {
           "XAI_API_KEY environment variable is required for xAI models"
         );
       }
-      return createXai({ apiKey: xaiApiKey })(modelName);
+      return {
+        model: createXai({ apiKey: xaiApiKey })(modelName),
+        options: {},
+      };
 
     case "together":
       const togetherApiKey = process.env.TOGETHER_AI_API_KEY;
@@ -72,7 +96,10 @@ export function createModel(modelId?: string) {
           "TOGETHER_AI_API_KEY environment variable is required for Together AI models"
         );
       }
-      return createTogetherAI({ apiKey: togetherApiKey })(modelName);
+      return {
+        model: createTogetherAI({ apiKey: togetherApiKey })(modelName),
+        options: {},
+      };
 
     default:
       throw new Error(

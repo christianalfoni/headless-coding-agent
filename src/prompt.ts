@@ -1,5 +1,10 @@
 import { streamText, Tool, stepCountIs } from "ai";
-import { Session, Message } from "./types";
+import {
+  PromptMessage,
+  WriteTodosCallMessage,
+  WriteTodosResultMessage,
+} from "./types";
+import { Session } from "./Session";
 
 export async function* streamPrompt(config: {
   session: Session;
@@ -9,17 +14,18 @@ export async function* streamPrompt(config: {
   toolChoice: "auto" | "required";
   maxSteps?: number;
   usePlanningModel?: boolean;
-}): AsyncGenerator<Message> {
+}): AsyncGenerator<
+  PromptMessage | WriteTodosCallMessage | WriteTodosResultMessage
+> {
   try {
     const result = await streamText({
-      model: config.usePlanningModel 
-        ? config.session.env.planningModel 
-        : config.session.env.model,
+      model: config.session.env.provider.model,
       system: config.system,
       prompt: config.prompt,
       tools: config.tools,
       toolChoice: config.toolChoice,
       stopWhen: config.maxSteps ? stepCountIs(config.maxSteps) : undefined,
+      providerOptions: config.session.env.provider.options,
     });
 
     let textBuffer = "";
@@ -58,7 +64,7 @@ export async function* streamPrompt(config: {
 
       if (part.type === "text-end") {
         // Yield custom text message with complete buffered text
-        const textPart: Message = {
+        const textPart: PromptMessage = {
           type: "text",
           text: textBuffer,
           ...sessionInfo,
@@ -82,7 +88,7 @@ export async function* streamPrompt(config: {
 
       if (part.type === "reasoning-end") {
         // Yield custom reasoning message with complete buffered reasoning
-        const reasoningPart: Message = {
+        const reasoningPart: PromptMessage = {
           type: "reasoning",
           text: reasoningBuffer,
           ...sessionInfo,
@@ -96,11 +102,7 @@ export async function* streamPrompt(config: {
       if (part.type === "tool-call") {
         config.session.step();
 
-        if (part.toolName === "WriteTodos") {
-          continue; // Skip WriteTodos tool calls
-        }
-
-        const toolCallPart: Message = {
+        const toolCallPart: PromptMessage = {
           type: "tool-call",
           toolCallId: part.toolCallId,
           toolName: part.toolName as any,
@@ -112,17 +114,7 @@ export async function* streamPrompt(config: {
       }
 
       if (part.type === "tool-result") {
-        if (part.toolName === "WriteTodos") {
-          const todosPart: Message = {
-            type: "todos",
-            todos: part.output.todos,
-            ...sessionInfo,
-          };
-          yield todosPart;
-          continue;
-        }
-
-        const toolResultPart: Message = {
+        const toolResultPart: PromptMessage = {
           type: "tool-result",
           toolCallId: part.toolCallId,
           toolName: part.toolName as any,
@@ -135,7 +127,7 @@ export async function* streamPrompt(config: {
 
       // Handle tool errors
       if (part.type === "tool-error") {
-        const toolErrorPart: Message = {
+        const toolErrorPart: PromptMessage = {
           type: "tool-error",
           toolCallId: part.toolCallId,
           toolName: part.toolName as any,
@@ -161,7 +153,7 @@ export async function* streamPrompt(config: {
 
       // Handle error events
       if (part.type === "error") {
-        const errorPart: Message = {
+        const errorPart: PromptMessage = {
           type: "error",
           error:
             part.error instanceof Error

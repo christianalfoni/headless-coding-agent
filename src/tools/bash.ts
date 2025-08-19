@@ -1,83 +1,123 @@
-import { tool } from "ai";
-import { z } from "zod";
-import { spawn } from "child_process";
-import * as os from "os";
+import { anthropic } from "@ai-sdk/anthropic";
+import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 
-const inputSchema = z.object({
-  bashCommand: z
-    .string()
-    .describe("The complete command to execute in bash shell"),
-});
+let currentShellInstance: ChildProcessWithoutNullStreams | null = null;
 
-export const Bash = tool({
-  description: `Execute commands in a bash shell. Input should be the full command to run (e.g., 'head -n 1 file.txt', 'ls -la', 'grep pattern file'). Running on ${os.platform()}.`,
-  inputSchema: inputSchema as any,
-  execute: async (params: any) => {
-    const command = params.bashCommand || "bash";
+const bashTool = anthropic.tools.bash_20250124({
+  execute: async ({ command, restart }) => {
+    // If restart is requested or no shell exists, spawn a new one
+    if (restart || !currentShellInstance || currentShellInstance.killed) {
+      if (currentShellInstance && !currentShellInstance.killed) {
+        currentShellInstance.kill("SIGTERM");
+      }
 
-    return new Promise((resolve, reject) => {
-      const child = spawn("bash", ["-c", command]);
+      currentShellInstance = spawn("bash", ["-i"], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { PS1: "" }, // Remove prompt to avoid confusion
+      });
+    }
 
+    if (
+      !currentShellInstance ||
+      !currentShellInstance.stdin ||
+      !currentShellInstance.stdout ||
+      !currentShellInstance.stderr
+    ) {
+      throw new Error("Failed to create or access shell instance");
+    }
+
+    const shellInstance = currentShellInstance;
+
+    return new Promise((resolve) => {
       let stdout = "";
       let stderr = "";
-      let lastOutputTime = Date.now();
-      const OUTPUT_TIMEOUT = 10000; // 10 seconds with no output
-      const MAX_EXECUTION_TIME = 60000; // 60 seconds max total
+      let exitCode = 0;
+      let hasExited = false;
 
-      // Monitor for output timeout
-      const outputTimeoutId = setInterval(() => {
-        const timeSinceLastOutput = Date.now() - lastOutputTime;
-        if (timeSinceLastOutput > OUTPUT_TIMEOUT) {
-          clearInterval(outputTimeoutId);
-          child.kill("SIGTERM");
-          reject(
-            new Error(
-              `Command appears to be a persistent process (no output for ${
-                OUTPUT_TIMEOUT / 1000
-              } seconds). Do not run long-running processes like dev servers, rather inform the user to run it during review`
-            )
-          );
+      const TIMEOUT = 15000; // 15 seconds
+
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        if (!hasExited) {
+          hasExited = true;
+
+          // Clear the shell state after timeout
+          if (shellInstance && shellInstance.stdin) {
+            shellInstance.stdin.write("clear\n");
+          }
+
+          resolve({ stdout, stderr, exitCode });
         }
-      }, 1000);
+      }, TIMEOUT);
 
-      // Hard timeout
-      const maxTimeoutId = setTimeout(() => {
-        clearInterval(outputTimeoutId);
-        child.kill("SIGTERM");
-        reject(
-          new Error(
-            `Command exceeded maximum execution time of ${
-              MAX_EXECUTION_TIME / 1000
-            } seconds. Please run long-running processes manually.`
-          )
-        );
-      }, MAX_EXECUTION_TIME);
-
-      child.stdout?.on("data", (data) => {
+      // Listen for data on stdout
+      const onStdout = (data: Buffer) => {
         stdout += data.toString();
-        lastOutputTime = Date.now();
-      });
+      };
 
-      child.stderr?.on("data", (data) => {
+      // Listen for data on stderr
+      const onStderr = (data: Buffer) => {
         stderr += data.toString();
-        lastOutputTime = Date.now();
-      });
+      };
 
-      child.on("close", () => {
-        clearInterval(outputTimeoutId);
-        clearTimeout(maxTimeoutId);
+      // Listen for shell exit (shouldn't happen in normal operation)
+      const onExit = (code: number | null) => {
+        if (!hasExited) {
+          hasExited = true;
+          clearTimeout(timeoutId);
+          exitCode = code || 0;
+          cleanup();
 
-        resolve({
-          stdout: stdout || stderr || "",
-          stderr: stderr || undefined,
-        });
-      });
+          // Note: Don't clear on exit since shell is already dead
+          resolve({ stdout, stderr, exitCode });
+        }
+      };
 
-      child.on("error", (error) => {
-        clearInterval(outputTimeoutId);
-        clearTimeout(maxTimeoutId);
-        reject(error);
-      });
+      const cleanup = () => {
+        shellInstance.stdout?.off("data", onStdout);
+        shellInstance.stderr?.off("data", onStderr);
+        shellInstance.off("exit", onExit);
+      };
+
+      shellInstance.stdout.on("data", onStdout);
+      shellInstance.stderr.on("data", onStderr);
+      shellInstance.on("exit", onExit);
+
+      // Execute the command with a marker to detect completion
+      const marker = `__CMD_COMPLETE_${Date.now()}__`;
+      const fullCommand = `${command}; echo "${marker}_$?"`;
+
+      // Listen for the completion marker
+      const checkCompletion = (data: Buffer) => {
+        const output = data.toString();
+        const markerMatch = output.match(new RegExp(`${marker}_(\\d+)`));
+
+        if (markerMatch) {
+          exitCode = parseInt(markerMatch[1], 10);
+          // Remove the marker from stdout
+          stdout = stdout.replace(new RegExp(`${marker}_\\d+\\n?`), "");
+
+          if (!hasExited) {
+            hasExited = true;
+            clearTimeout(timeoutId);
+            cleanup();
+
+            // Clear the shell state after command completion
+            if (shellInstance && shellInstance.stdin) {
+              shellInstance.stdin.write("clear\n");
+            }
+
+            resolve({ stdout, stderr, exitCode });
+          }
+        }
+      };
+
+      shellInstance.stdout.on("data", checkCompletion);
+
+      // Send the command
+      shellInstance.stdin.write(fullCommand + "\n");
     });
   },
 });
+
+export const bash = bashTool;

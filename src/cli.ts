@@ -78,9 +78,6 @@ function parseArgs() {
       "  --model: AI model to use (default: anthropic/claude-3-5-sonnet-20241022)"
     );
     console.error(
-      "  --planningModel: AI model to use for planning/evaluating todos (defaults to main model)"
-    );
-    console.error(
       "  --todos: JSON array of initial todos for session continuation"
     );
     process.exit(1);
@@ -91,14 +88,13 @@ function parseArgs() {
 
 async function main() {
   try {
-    const { prompt, format, maxSteps, model, planningModel, initialTodos } = parseArgs();
+    const { prompt, format, maxSteps, model, initialTodos } = parseArgs();
 
     const stream = query({
       prompt,
       workingDirectory: process.cwd(),
       maxSteps,
       model,
-      planningModel,
       todos: initialTodos,
     });
 

@@ -13,7 +13,7 @@ const inputSchema = z.object({
 const DESCRIPTION =
   "List the todos that need to be completed for the current request. Prefer creating broader, consolidated todos rather than breaking tasks into narrow steps.";
 
-export const WriteTodos = tool({
+export const write_todos = tool({
   description: DESCRIPTION,
   inputSchema: inputSchema as any,
   execute: async (input: {
@@ -22,7 +22,6 @@ export const WriteTodos = tool({
       context: string;
     }[];
   }) => {
-    // This tool manages todo state
-    return { success: true, todos: input.todos };
+    return "success";
   },
 });

@@ -11,11 +11,6 @@ export interface QueryOptions {
    */
   maxSteps?: number;
   model?: string;
-  /**
-   * Model to use for planning/evaluating todos. Expected to be a "smarter" model
-   * for optimizing context and determining next steps efficiently.
-   */
-  planningModel?: string;
   todos?: Todo[];
 }
 
@@ -24,14 +19,9 @@ export async function* query(options: QueryOptions) {
     options.workingDirectory,
     undefined,
     options.maxSteps ?? 50,
-    options.model,
-    options.planningModel
+    options.model
   );
-  return yield* Session.create(
-    options.prompt,
-    context,
-    options.todos
-  );
+  return yield* Session.create(options.prompt, context, options.todos);
 }
 
 // Re-export all types for SDK usage

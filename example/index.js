@@ -44,12 +44,12 @@ class AgentChat {
   }
 
   truncateInput(input, maxLines = 4) {
-    if (typeof input !== 'string') {
+    if (typeof input !== "string") {
       input = JSON.stringify(input);
     }
-    const lines = input.split('\n');
+    const lines = input.split("\n");
     if (lines.length > maxLines) {
-      const truncated = lines.slice(0, maxLines).join('\n');
+      const truncated = lines.slice(0, maxLines).join("\n");
       const remainingLines = lines.length - maxLines;
       return `${truncated}\n...+ ${remainingLines} lines`;
     }
@@ -62,48 +62,71 @@ class AgentChat {
         return chalk.white("💬 ") + part.text;
 
       case "reasoning":
-        return chalk.yellow("🧠 ") + chalk.yellow(part.text);
+        return chalk.gray("🧠 ") + chalk.gray(part.text);
 
       case "tool-call":
         let toolDescription = chalk.blue.bold(part.toolName);
-        if (part.toolName === "Edit") {
-          const findText = this.truncateInput(part.args.find);
-          const replaceText = this.truncateInput(part.args.replace);
-          toolDescription += chalk.gray(
-            ` (${part.args.file}: "${findText}" → "${replaceText}")`
-          );
-        } else if (part.toolName === "MultiEdit") {
-          toolDescription += chalk.gray(
-            ` (${part.args.file}: ${part.args.edits.length} edits)`
-          );
-        } else if (part.toolName === "Bash") {
-          const command = this.truncateInput(part.args.bashCommand);
-          toolDescription += chalk.gray(` (${command})`);
-        } else if (part.toolName === "Read") {
-          const args = this.truncateInput(part.args.catArguments);
-          toolDescription += chalk.gray(` (${args})`);
-        } else if (part.toolName === "Write") {
-          toolDescription += chalk.gray(` (${part.args.filePath})`);
-        } else if (part.toolName === "Ls") {
-          const args = this.truncateInput(part.args.lsArguments);
-          toolDescription += chalk.gray(` (${args})`);
-        } else if (part.toolName === "Glob") {
-          const args = this.truncateInput(part.args.globArguments);
-          toolDescription += chalk.gray(` (${args})`);
-        } else if (part.toolName === "Grep") {
-          const args = this.truncateInput(part.args.grepArguments);
-          toolDescription += chalk.gray(` (${args})`);
-        } else if (part.toolName === "WebFetch") {
+        if (part.toolName === "write_todos") {
+          const todoCount = part.args.todos ? part.args.todos.length : 0;
+          toolDescription += chalk.gray(` (updating ${todoCount} todos)`);
+        } else if (part.toolName === "bash") {
+          if (part.args.restart) {
+            toolDescription += chalk.gray(` (restart shell)`);
+          } else if (part.args.command) {
+            const command = this.truncateInput(part.args.command);
+            toolDescription += chalk.gray(` (${command})`);
+          }
+        } else if (part.toolName === "str_replace_based_edit_tool") {
+          const command = part.args.command;
+          const path = part.args.path;
+          if (command === "view") {
+            if (part.args.view_range) {
+              toolDescription += chalk.gray(
+                ` (${command} ${path}:${part.args.view_range[0]}-${part.args.view_range[1]})`
+              );
+            } else {
+              toolDescription += chalk.gray(` (${command} ${path})`);
+            }
+          } else if (command === "create") {
+            toolDescription += chalk.gray(` (${command} ${path})`);
+          } else if (command === "str_replace") {
+            const oldText = this.truncateInput(part.args.old_str);
+            const newText = this.truncateInput(part.args.new_str);
+            toolDescription += chalk.gray(
+              ` (${command} ${path}: "${oldText}" → "${newText}")`
+            );
+          } else if (command === "insert") {
+            const newText = this.truncateInput(part.args.new_str);
+            toolDescription += chalk.gray(
+              ` (${command} ${path}:${part.args.insert_line}: "${newText}")`
+            );
+          } else {
+            toolDescription += chalk.gray(` (${command} ${path})`);
+          }
+        } else if (part.toolName === "web_fetch") {
           toolDescription += chalk.gray(` (${part.args.url})`);
-        } else if (part.toolName === "WebSearch") {
+        } else if (part.toolName === "web_search") {
           toolDescription += chalk.gray(` ("${part.args.query}")`);
         }
         return chalk.blue("🔧 ") + toolDescription;
 
       case "tool-result":
         let resultMessage = `${part.toolName} completed`;
-        if (part.toolName === "Edit" || part.toolName === "MultiEdit") {
-          resultMessage += part.result.ok ? " successfully" : " with errors";
+        if (part.toolName === "write_todos") {
+          const todoCount = part.result.todos ? part.result.todos.length : 0;
+          resultMessage += ` successfully (${todoCount} todos)`;
+          // Update the current todos
+          if (part.result.todos) {
+            this.lastTodos = part.result.todos;
+          }
+        } else if (part.toolName === "bash") {
+          const exitCode = part.result.exitCode;
+          resultMessage +=
+            exitCode === 0 ? " successfully" : ` with exit code ${exitCode}`;
+        } else if (part.toolName === "str_replace_based_edit_tool") {
+          resultMessage += part.result.includes("Error:")
+            ? " with errors"
+            : " successfully";
         }
         return chalk.green("✅ ") + chalk.gray(resultMessage);
 
@@ -136,7 +159,17 @@ class AgentChat {
 
       case "completed":
         this.lastTodos = part.todos; // Save completed todos
-        return ""; // Don't show completion message
+        const duration = (part.durationMs / 1000).toFixed(1);
+        return (
+          chalk.green("🏁 ") +
+          chalk.gray(
+            `Completed in ${part.stepCount} steps, ${
+              part.inputTokens + part.outputTokens
+            } tokens (${part.inputTokens} in, ${
+              part.outputTokens
+            } out), ${duration}s`
+          )
+        );
 
       case "error":
         return (
@@ -162,7 +195,7 @@ class AgentChat {
       // Use the SDK query function
       for await (const part of query({
         prompt,
-        // model: "together/openai/gpt-oss-120b",
+        // model: "openai/gpt-5-mini-2025-08-07",
         workingDirectory: process.cwd(),
         maxSteps: 200,
         todos: this.lastTodos,

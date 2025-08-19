@@ -12,7 +12,7 @@ const inputSchema = z.object({
   timeoutMs: z.number().optional().describe("Timeout in milliseconds"),
 }) as any;
 
-export const WebFetch = tool({
+export const web_fetch = tool({
   description:
     "Fetch a URL and extract the main text using Mozilla Readability.",
   inputSchema,
