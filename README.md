@@ -143,49 +143,33 @@ coding-agent --prompt "Continue implementation" --todos '[{"description":"Setup 
 
 ### Available Providers
 
-The agent supports multiple AI providers through a unified interface. Specify models using the format `provider/model-name`:
+The agent currently supports 3 AI providers with full implementation. Specify models using the format `provider/model-name`:
 
 #### Anthropic
-
 - **Environment Variable**: `ANTHROPIC_API_KEY`
+- **Default Model**: `claude-3-5-sonnet-20241022`
 - **Example**: `agent --prompt "Fix bugs" --model "anthropic/claude-3-5-sonnet-20241022"`
 
 #### OpenAI
-
 - **Environment Variable**: `OPENAI_API_KEY`
+- **Default Model**: `gpt-4o`
 - **Example**: `agent --prompt "Code review" --model "openai/gpt-4o"`
 
-#### Google
-
-- **Environment Variable**: `GOOGLE_GENERATIVE_AI_API_KEY`
-- **Example**: `agent --prompt "Analyze data" --model "google/gemini-1.5-pro"`
-
-#### Mistral
-
-- **Environment Variable**: `MISTRAL_API_KEY`
-- **Example**: `agent --prompt "Complex task" --model "mistral/mistral-large-latest"`
-
-#### xAI (Grok)
-
-- **Environment Variable**: `XAI_API_KEY`
-- **Example**: `agent --prompt "Creative coding" --model "xai/grok-beta"`
-
 #### Together AI
-
 - **Environment Variable**: `TOGETHER_AI_API_KEY`
-- **Example**: `agent --prompt "OSS project" --model "together/meta-llama/Llama-2-70b-chat-hf"`
+- **Default Model**: `meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo`
+- **Example**: `agent --prompt "OSS project" --model "together/meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo"`
+
+> **Note**: While dependencies for Google, Mistral, and xAI providers are included, full implementation is not yet available. Contributions for additional provider support are welcome.
 
 ### Setting Up API Keys
 
 Create a `.env` file or set environment variables:
 
 ```bash
-# Choose one or more providers
+# Choose one or more providers (at least one required)
 ANTHROPIC_API_KEY=your_anthropic_key_here
 OPENAI_API_KEY=your_openai_key_here
-GOOGLE_GENERATIVE_AI_API_KEY=your_google_key_here
-MISTRAL_API_KEY=your_mistral_key_here
-XAI_API_KEY=your_xai_key_here
 TOGETHER_AI_API_KEY=your_together_key_here
 ```
 
@@ -221,9 +205,10 @@ The system implements a **todo-based execution model** where user prompts are br
 - **AI Model**: Uses planning-specific system prompts optimized for task breakdown
 - **Tools Available**: `write_todos` tool only (focused planning phase)
 - **Key Features**:
-  - Estimates reasoning effort for optimal AI model configuration
+  - **Reasoning Effort Classification**: Analyzes task complexity and assigns effort levels ("low", "medium", "high") to optimize AI model configuration
   - Creates sequential todos with contextual dependencies
   - Avoids creating test/verification todos (handled internally)
+  - Each todo includes programmatic context about its position in the overall plan
 
 #### Phase 2: Todo Execution (`Session.executeTodo()`)  
 - **Purpose**: Executes individual todos with full tool access
@@ -343,7 +328,7 @@ AI's internal reasoning process:
 
 #### TodosMessage
 
-Todo list updates:
+Todo list updates with reasoning effort classification:
 
 ```json
 {
@@ -352,7 +337,8 @@ Todo list updates:
     {
       "description": "Fix TypeScript errors in src/",
       "context": "Type checking revealed errors that need fixing",
-      "status": "pending"
+      "status": "pending",
+      "reasoningEffort": "medium"
     }
   ],
   "sessionId": "uuid-1234"
@@ -580,7 +566,7 @@ The error handling system automatically catches exceptions thrown by tools and c
 
 #### CompletedMessage
 
-Session completion:
+Session completion with usage statistics and cost tracking:
 
 ```json
 {
@@ -589,12 +575,14 @@ Session completion:
   "outputTokens": 890,
   "stepCount": 12,
   "durationMs": 45000,
+  "cost": 0.042,
   "todos": [
     {
       "description": "Fix TypeScript errors",
       "context": "Build process was failing due to type issues",
       "status": "completed",
-      "summary": "Successfully fixed 3 type errors in user.ts and auth.ts"
+      "summary": "Successfully fixed 3 type errors in user.ts and auth.ts",
+      "reasoningEffort": "medium"
     }
   ],
   "sessionId": "uuid-1234"
@@ -681,9 +669,6 @@ ANTHROPIC_API_KEY=your_anthropic_key_here
 
 # Optional additional providers
 OPENAI_API_KEY=your_openai_key_here
-GOOGLE_GENERATIVE_AI_API_KEY=your_google_key_here
-MISTRAL_API_KEY=your_mistral_key_here
-XAI_API_KEY=your_xai_key_here
 TOGETHER_AI_API_KEY=your_together_key_here
 ```
 
@@ -705,12 +690,17 @@ npm run dev -- --prompt "your prompt"
 
 ### Model Configuration
 
-Defaults to `anthropic/claude-3-5-sonnet-20241022` but supports multiple AI providers. Model selection is handled in `src/modelProvider.ts:8-65` with automatic provider routing based on the model string format `provider/model-name`.
+Defaults to `anthropic/claude-3-5-sonnet-20241022` but supports 3 AI providers. Model selection includes:
+
+- **Automatic Provider Routing**: Based on `provider/model-name` format
+- **Reasoning Effort Optimization**: Complex tasks ("high" effort) use more capable models
+- **Cost Tracking**: Session tracks token usage and costs across all provider calls
+- **Default Models**: `claude-3-5-sonnet-20241022` (Anthropic), `gpt-4o` (OpenAI), `meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo` (Together AI)
 
 ## Available Tools
 
-- **bash**: Execute shell commands with timeout protection
+- **bash**: Execute shell commands with timeout protection and development server restrictions (blocks `npm run dev`, `yarn start`, etc.)
 - **str_replace_based_edit_tool**: File editing tool for viewing and editing individual files through viewing, creating, replacing text strings, and inserting content
 - **web_search**: Search the web using SearxNG instances
 - **web_fetch**: Fetch and process web content
-- **write_todos**: Create and manage todo lists (used internally during planning)
+- **write_todos**: Create and manage todo lists with reasoning effort classification (used internally during planning phase only)
