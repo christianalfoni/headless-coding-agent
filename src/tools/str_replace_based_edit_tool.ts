@@ -6,7 +6,7 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
   return {
     id: "anthropic.textEditor_20250429",
     name: "str_replace_based_edit_tool",
-    description: `File operations like string replacement, creation, viewing, and insertion. Working directory: ${workingDirectory}. Use relative paths from this directory or absolute paths.`,
+    description: `File editing tool for viewing and editing individual files through string replacement, creation, viewing, and insertion. Working directory: ${workingDirectory}. Use relative paths from this directory or absolute paths.`,
     input_schema: {
       type: "object",
       properties: {
@@ -66,6 +66,13 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
       try {
         switch (command) {
           case "view":
+            // Check if path is a directory
+            const stats = await fs.stat(filePath);
+            if (stats.isDirectory()) {
+              const files = await fs.readdir(filePath);
+              return files.join("\n");
+            }
+
             const content = await fs.readFile(filePath, "utf8");
             const lines = content.split("\n");
 

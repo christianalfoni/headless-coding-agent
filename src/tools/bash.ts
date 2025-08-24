@@ -4,7 +4,7 @@ import * as os from "os";
 // Function version that includes working directory context
 export function bash(workingDirectory: string) {
   // Create shell instance immediately with proper working directory
-  let currentShellInstance = spawn("bash", ["-i"], {
+  let currentShellInstance = spawn("bash", [], {
     stdio: ["pipe", "pipe", "pipe"],
     cwd: workingDirectory, // Set the initial working directory
     env: { ...process.env, PS1: "" }, // Remove prompt to avoid confusion
@@ -69,7 +69,7 @@ export function bash(workingDirectory: string) {
         if (currentShellInstance && !currentShellInstance.killed) {
           currentShellInstance.kill("SIGTERM");
         }
-        currentShellInstance = spawn("bash", ["-i"], {
+        currentShellInstance = spawn("bash", [], {
           stdio: ["pipe", "pipe", "pipe"],
           cwd: workingDirectory, // Set the initial working directory
           env: { ...process.env, PS1: "" },

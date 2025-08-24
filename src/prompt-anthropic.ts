@@ -15,7 +15,7 @@ export async function* streamPrompt(config: {
   planningMode?: boolean;
   reasoningEffort?: "minimal" | "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
-  returnOnToolResult?: boolean;
+  returnOnToolResult?: string;
 }): AsyncGenerator<
   PromptMessage | WriteTodosCallMessage | WriteTodosResultMessage
 > {
@@ -67,9 +67,11 @@ export async function* streamPrompt(config: {
             }
           : undefined,
         temperature,
-        tool_choice: {
-          type: "auto",
-        },
+        tool_choice: anthropicTools.length
+          ? {
+              type: "auto",
+            }
+          : undefined,
       });
 
       totalInputTokens += response.usage.input_tokens;
@@ -173,10 +175,12 @@ export async function* streamPrompt(config: {
             yield toolResultMessage;
 
             // Return early if configured to do so
-            if (config.returnOnToolResult) {
+            if (config.returnOnToolResult && toolUse.name === config.returnOnToolResult) {
+              const cost = (totalInputTokens * 0.0003) + (totalOutputTokens * 0.0015);
               config.session.increaseTokens(
                 totalInputTokens,
-                totalOutputTokens
+                totalOutputTokens,
+                cost
               );
               return finalTextOutput;
             }
@@ -224,7 +228,8 @@ export async function* streamPrompt(config: {
     }
 
     // Update session with token usage
-    config.session.increaseTokens(totalInputTokens, totalOutputTokens);
+    const cost = (totalInputTokens * 0.0003) + (totalOutputTokens * 0.0015);
+    config.session.increaseTokens(totalInputTokens, totalOutputTokens, cost);
 
     return finalTextOutput;
   } catch (error) {

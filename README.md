@@ -250,7 +250,7 @@ Used in `Session.executeTodo()`:
 - **Purpose**: Execute a specific todo using available tools
 - **Context**: Working directory, specific todo description
 - **Behavior**: Focus on efficient task completion, avoid long-running processes
-- **Tool Access**: All tools (bash, read, edit, glob, grep, ls, write, multiEdit, WebFetch, WebSearch)
+- **Tool Access**: All tools (bash, str_replace_based_edit_tool, web_search, web_fetch)
 
 ### Summarization Prompt
 
@@ -677,14 +677,8 @@ Defaults to `anthropic/claude-3-5-sonnet-20241022` but supports multiple AI prov
 
 ## Available Tools
 
-- **Bash**: Execute shell commands with timeout protection
-- **Read**: Read file contents with line range support
-- **Edit**: Make literal text replacements in files
-- **MultiEdit**: Perform multiple literal text replacements in a single operation
-- **Glob**: Find files using glob patterns
-- **Grep**: Search file contents with regex
-- **Ls**: List directory contents
-- **Write**: Create or overwrite files
-- **WebFetch**: Fetch and analyze web content
-- **WebSearch**: Search the web for information
-- **WriteTodos**: Manage todo lists (evaluation phase only)
+- **bash**: Execute shell commands with timeout protection
+- **str_replace_based_edit_tool**: File editing tool for viewing and editing individual files through viewing, creating, replacing text strings, and inserting content
+- **web_search**: Search the web using SearxNG instances
+- **web_fetch**: Fetch and process web content
+- **write_todos**: Create and manage todo lists (used internally during planning)

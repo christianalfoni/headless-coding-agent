@@ -25,6 +25,8 @@
     "@codesandbox/sdk": "^2.0.7",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.0.0",
+    "boxen": "^8.0.1",
+    "inquirer": "^12.9.3",
     "tsx": "^4.0.0",
     "typescript": "^5.5.0"
   },

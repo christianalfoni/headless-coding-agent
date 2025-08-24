@@ -135,20 +135,30 @@ class AgentChat {
           if (part.result.todos) {
             this.lastTodos = part.result.todos;
           }
-          return chalk.green("✅ ") + chalk.gray(`todos updated (${todoCount} todos)`);
+          return (
+            chalk.green("✅ ") +
+            chalk.gray(`todos updated (${todoCount} todos)`)
+          );
         } else if (part.toolName === "bash") {
           const exitCode = part.result.exitCode;
           const pwd = part.result.pwd || part.result.workingDirectory;
           if (exitCode !== 0) {
-            return chalk.red("❌ ") + chalk.red(`bash failed with exit code ${exitCode}`);
+            return (
+              chalk.red("❌ ") +
+              chalk.red(`bash failed with exit code ${exitCode}`)
+            );
           } else if (pwd) {
             // Check if working directory changed
             if (this.lastPwd && this.lastPwd !== pwd) {
               this.lastPwd = pwd;
-              return chalk.green("✅ ") + chalk.blue("📁 ") + chalk.gray(`directory changed to ${pwd}`);
+              return (
+                chalk.green("✅ ") +
+                chalk.blue("📁 ") +
+                chalk.gray(`directory changed to ${pwd}`)
+              );
             } else {
               this.lastPwd = pwd;
-              return chalk.green("✅ ") + chalk.gray(`executed in ${pwd}`);
+              return chalk.green("✅");
             }
           }
         } else if (part.toolName === "str_replace_based_edit_tool") {
@@ -162,20 +172,29 @@ class AgentChat {
       case "tool-error":
         return (
           chalk.red("❌ Tool Error: ") +
-          chalk.red.bold(part.toolName) + "\n" +
-          chalk.red("   Error: ") + chalk.red(part.error)
+          chalk.red.bold(part.toolName) +
+          "\n" +
+          chalk.red("   Error: ") +
+          chalk.red(part.error)
         );
 
       case "todos":
         if (part.todos && part.todos.length > 0) {
           this.lastTodos = part.todos;
-          
+
           // Find the last completed todo
-          const completedTodos = part.todos.filter(todo => todo.status === "completed");
-          const lastCompletedTodo = completedTodos.length > 0 ? completedTodos[completedTodos.length - 1] : null;
-          
+          const completedTodos = part.todos.filter(
+            (todo) => todo.status === "completed"
+          );
+          const lastCompletedTodo =
+            completedTodos.length > 0
+              ? completedTodos[completedTodos.length - 1]
+              : null;
+
           return (
-            chalk.magenta("📋 Todos Updated ") + chalk.yellow(`(${part.reasoningEffort})`) + "\n" +
+            chalk.magenta("📋 Todos Updated ") +
+            chalk.yellow(`(${part.reasoningEffort})`) +
+            "\n" +
             part.todos
               .map((todo) => {
                 const statusIcon =
@@ -184,8 +203,12 @@ class AgentChat {
                     : todo.status === "in_progress"
                     ? "🔄"
                     : "⏳";
-                
-                return `  ${statusIcon} ` + chalk.yellow(`(${todo.reasoningEffort})`) + ` ${todo.description}`;
+
+                return (
+                  `  ${statusIcon} ` +
+                  chalk.yellow(`(${todo.reasoningEffort})`) +
+                  ` ${todo.description}`
+                );
               })
               .join("\n")
           );
@@ -194,7 +217,17 @@ class AgentChat {
 
       case "completed":
         this.lastTodos = part.todos; // Save completed todos
-        const duration = (part.durationMs / 1000).toFixed(1);
+        const totalSeconds = Math.floor(part.durationMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const duration =
+          minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        
+        let costInfo = "";
+        if (part.totalCostDollars !== undefined) {
+          costInfo = `, $${part.totalCostDollars.toFixed(4)}`;
+        }
+        
         return (
           chalk.green("🏁 ") +
           chalk.gray(
@@ -202,7 +235,7 @@ class AgentChat {
               part.inputTokens + part.outputTokens
             } tokens (${part.inputTokens} in, ${
               part.outputTokens
-            } out), ${duration}s`
+            } out), ${duration}${costInfo}`
           )
         );
 
@@ -230,7 +263,7 @@ class AgentChat {
       // Use the SDK query function
       const model = getModelForProvider(this.provider);
       const models = createModels(this.provider, model);
-      
+
       for await (const part of query({
         prompt,
         workingDirectory: process.cwd(),
@@ -317,12 +350,14 @@ class AgentChat {
         console.log(chalk.cyan("\n🚀 Starting agent...\n"));
 
         await this.executeAgent(prompt);
-
       } catch (error) {
         console.error(chalk.red.bold("\n💥 Agent Error:"));
         console.error(chalk.red("   Message: ") + error.message);
         if (error.stack) {
-          console.error(chalk.red("   Stack: ") + chalk.gray(error.stack.split('\n').slice(1, 3).join('\n')));
+          console.error(
+            chalk.red("   Stack: ") +
+              chalk.gray(error.stack.split("\n").slice(1, 3).join("\n"))
+          );
         }
         console.log(chalk.yellow("\n🔄 Ready for your next prompt!\n"));
       }
@@ -338,16 +373,24 @@ function parseArgs() {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--provider" && i + 1 < args.length) {
       const providerArg = args[i + 1];
-      if (providerArg === "anthropic" || providerArg === "openai" || providerArg === "together") {
+      if (
+        providerArg === "anthropic" ||
+        providerArg === "openai" ||
+        providerArg === "together"
+      ) {
         provider = providerArg;
       } else {
-        console.error("Error: provider must be 'anthropic', 'openai', or 'together'");
+        console.error(
+          "Error: provider must be 'anthropic', 'openai', or 'together'"
+        );
         process.exit(1);
       }
       i++; // Skip the next argument
     } else if (args[i] === "--help" || args[i] === "-h") {
       console.log("Usage: node index.js [--provider <provider>]");
-      console.log("  --provider: AI provider to use: anthropic, openai, or together (default: anthropic)");
+      console.log(
+        "  --provider: AI provider to use: anthropic, openai, or together (default: anthropic)"
+      );
       process.exit(0);
     }
   }

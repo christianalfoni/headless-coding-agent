@@ -21,6 +21,7 @@ export type CompletedMessage = {
   stepCount: number;
   durationMs: number;
   todos?: Todo[];
+  totalCostDollars?: number;
 } & SessionInfo;
 // Tool call message types
 export type WriteTodosCallMessage = {
@@ -88,7 +89,14 @@ export type BashToolResultMessage = {
   type: "tool-result";
   toolCallId: string;
   toolName: "bash";
-  result: { stdout: string; stderr: string; exitCode: number };
+  result: { 
+    stdout: string; 
+    stderr: string; 
+    exitCode: number; 
+    pwd?: string; 
+    workingDirectory?: string;
+    note?: string;
+  };
 } & SessionInfo;
 
 export type StrReplaceBasedEditToolResultMessage = {

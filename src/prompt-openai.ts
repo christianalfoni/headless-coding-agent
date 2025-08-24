@@ -15,6 +15,7 @@ export async function* streamPrompt(config: {
   planningMode?: boolean;
   reasoningEffort?: "minimal" | "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
+  returnOnToolResult?: string;
 }): AsyncGenerator<
   PromptMessage | WriteTodosCallMessage | WriteTodosResultMessage
 > {
@@ -176,6 +177,21 @@ export async function* streamPrompt(config: {
             } as any;
             yield toolResultMessage;
 
+            // Return early if configured to do so
+            if (
+              config.returnOnToolResult &&
+              name === config.returnOnToolResult
+            ) {
+              const cost =
+                totalInputTokens * 0.000125 + totalOutputTokens * 0.001;
+              config.session.increaseTokens(
+                totalInputTokens,
+                totalOutputTokens,
+                cost
+              );
+              return finalTextOutput;
+            }
+
             // Prepare output for next API call
             outputs.push({
               type: "function_call_output",
@@ -214,7 +230,8 @@ export async function* streamPrompt(config: {
     }
 
     // Update session with token usage
-    config.session.increaseTokens(totalInputTokens, totalOutputTokens);
+    const cost = totalInputTokens * 0.0003 + totalOutputTokens * 0.0015;
+    config.session.increaseTokens(totalInputTokens, totalOutputTokens, cost);
 
     return finalTextOutput;
   } catch (error) {

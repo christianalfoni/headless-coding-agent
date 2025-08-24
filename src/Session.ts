@@ -36,6 +36,7 @@ export class Session {
   public env: SessionEnvironment;
   public inputTokens: number;
   public outputTokens: number;
+  public totalCostCents: number;
   public stepCount: number;
   public userPrompt: string;
   public readonly startTime: Date;
@@ -54,6 +55,7 @@ export class Session {
     this.env = env;
     this.inputTokens = 0;
     this.outputTokens = 0;
+    this.totalCostCents = 0;
     this.stepCount = 0;
     this.startTime = new Date();
     this.models = models;
@@ -69,9 +71,12 @@ export class Session {
     }
   }
 
-  increaseTokens(inputTokens: number, outputTokens: number): void {
+  increaseTokens(inputTokens: number, outputTokens: number, costCents?: number): void {
     this.inputTokens += inputTokens;
     this.outputTokens += outputTokens;
+    if (costCents !== undefined) {
+      this.totalCostCents += costCents;
+    }
   }
 
   getMaxSteps(): number | undefined {
@@ -173,6 +178,7 @@ export class Session {
       durationMs,
       todos: this.todos,
       sessionId: this.sessionId,
+      totalCostDollars: this.totalCostCents > 0 ? this.totalCostCents / 100 : undefined,
     };
     yield completedPart;
   }
@@ -236,11 +242,12 @@ IMPORTANT:
       prompt,
       tools: {
         write_todos: write_todos(),
+        bash: bash(this.env.workingDirectory),
       },
       planningMode: true,
       reasoningEffort: effortEstimate.suggested.reasoningEffort,
       verbosity: "low",
-      returnOnToolResult: true,
+      returnOnToolResult: "write_todos",
     });
 
     let todosWritten: Array<{
