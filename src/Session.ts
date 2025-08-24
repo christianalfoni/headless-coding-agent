@@ -71,7 +71,11 @@ export class Session {
     }
   }
 
-  increaseTokens(inputTokens: number, outputTokens: number, costCents?: number): void {
+  increaseTokens(
+    inputTokens: number,
+    outputTokens: number,
+    costCents?: number
+  ): void {
     this.inputTokens += inputTokens;
     this.outputTokens += outputTokens;
     if (costCents !== undefined) {
@@ -156,11 +160,6 @@ export class Session {
         todos: structuredClone(this.todos),
         reasoningEffort: this.reasoningEffort,
       };
-
-      // Only re-evaluate todos if there are still pending ones
-      if (this.todos.some((todo) => todo.status === "pending")) {
-        yield* this.evaluateTodos();
-      }
     }
 
     // Only summarize if we have multiple todos
@@ -178,7 +177,8 @@ export class Session {
       durationMs,
       todos: this.todos,
       sessionId: this.sessionId,
-      totalCostDollars: this.totalCostCents > 0 ? this.totalCostCents / 100 : undefined,
+      totalCostDollars:
+        this.totalCostCents > 0 ? this.totalCostCents / 100 : undefined,
     };
     yield completedPart;
   }
@@ -197,16 +197,14 @@ export class Session {
               summary: todo.summary,
             }))
           )}`
-        : "";
+        : "Completed todos with summaries:\nNo completed todos";
 
     const pendingTodosContext =
       pendingTodos.length > 0
         ? `Current pending todos:\n${JSON.stringify(pendingTodos)}`
-        : "";
+        : "Current pending todos:\nNo pending todos";
 
-    const context = [completedTodosContext, pendingTodosContext]
-      .filter(Boolean)
-      .join("\n\n");
+    const context = [completedTodosContext, pendingTodosContext].join("\n\n");
 
     const basePrompt = `${this.userPrompt}${context ? `\n\n${context}` : ""}
 
@@ -346,7 +344,9 @@ IMPORTANT:
       session: this,
       system: systemPrompt,
       prompt,
-      tools: {},
+      tools: {
+        write_todos: write_todos(),
+      },
       maxSteps: this.getMaxSteps(),
       reasoningEffort: "minimal",
       verbosity: "medium",

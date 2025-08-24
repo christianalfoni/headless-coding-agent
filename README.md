@@ -214,10 +214,42 @@ Each prompt from a user creates a session. The session is responsible for tracki
 
 ### Execution Flow
 
-1. **Todo Evaluation**: AI analyzes the prompt and creates/updates todo list
-2. **Todo Execution**: Individual todos executed with available tools
-3. **Todo Evaluation**: Each completed todo runs a new evaluation of remaining todos
-4. **Summarization**: Final results compiled and presented
+The system implements a **todo-based execution model** where user prompts are broken down into sequential todos that are executed one by one:
+
+#### Phase 1: Todo Evaluation (`Session.evaluateTodos()`)
+- **Purpose**: Analyzes the user prompt and breaks it down into actionable todos
+- **AI Model**: Uses planning-specific system prompts optimized for task breakdown
+- **Tools Available**: `write_todos` tool only (focused planning phase)
+- **Key Features**:
+  - Estimates reasoning effort for optimal AI model configuration
+  - Creates sequential todos with contextual dependencies
+  - Avoids creating test/verification todos (handled internally)
+
+#### Phase 2: Todo Execution (`Session.executeTodo()`)  
+- **Purpose**: Executes individual todos with full tool access
+- **AI Model**: Uses execution-specific system prompts optimized for implementation
+- **Tools Available**: `bash`, `str_replace_based_edit_tool`, `web_search`, `web_fetch`
+- **Restrictions**:
+  - No development server commands (npm run dev, yarn start, etc.)
+  - Conservative testing approach (only when explicitly needed)
+  - Strict scope adherence to todo description
+
+#### Phase 3: Todo Completion Loop
+- Executes todos sequentially until all are completed
+- Each todo maintains its original scope and context
+- No re-evaluation between individual todo completions
+
+#### Phase 4: Summarization (`Session.summarizeTodos()`)
+- **Purpose**: Provides final summary when multiple todos were completed  
+- **AI Model**: Uses summary-specific system prompts
+- **Tools Available**: None (summary-only phase)
+
+#### Core Flow Pattern:
+```
+User Prompt → Todo Evaluation → Execute Todo → Execute Todo → ... → Summary
+```
+
+Each phase uses specialized AI prompts and tool access to optimize for its specific purpose, creating a systematic approach to complex task execution.
 
 ### Session Environment
 

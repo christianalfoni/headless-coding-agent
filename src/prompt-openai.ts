@@ -64,10 +64,10 @@ export async function* streamPrompt(config: {
         model: "gpt-5",
         input: nextInput,
         previous_response_id: previousResponseId,
-        reasoning: {
-          effort: config.reasoningEffort || "medium", // Let GPT-5 auto-determine unless explicitly set
+        reasoning: config.reasoningEffort && config.reasoningEffort !== "minimal" ? {
+          effort: config.reasoningEffort,
           summary: "auto",
-        },
+        } : undefined,
         text: {
           verbosity: config.verbosity || "medium",
         },

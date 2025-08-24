@@ -61,6 +61,9 @@ class AgentChat {
   }
 
   truncateInput(input, maxLines = 4) {
+    if (input == null) {
+      return "";
+    }
     if (typeof input !== "string") {
       input = JSON.stringify(input);
     }
@@ -158,7 +161,7 @@ class AgentChat {
               );
             } else {
               this.lastPwd = pwd;
-              return chalk.green("✅");
+              return ""; // Don't show anything for successful commands
             }
           }
         } else if (part.toolName === "str_replace_based_edit_tool") {
