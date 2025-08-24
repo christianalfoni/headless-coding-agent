@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { query } from "../dist/index.js";
+import { createModels } from "../dist/prompts.js";
 import inquirer from "inquirer";
 import chalk from "chalk";
 import ora from "ora";
@@ -8,11 +9,26 @@ import boxen from "boxen";
 import process from "process";
 import fs from "fs";
 
+function getModelForProvider(provider) {
+  switch (provider) {
+    case "anthropic":
+      return "claude-3-5-sonnet-20241022";
+    case "openai":
+      return "gpt-4o";
+    case "together":
+      return "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo";
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
+  }
+}
+
 class AgentChat {
-  constructor() {
+  constructor(provider = "anthropic") {
     this.isAgentRunning = false;
     this.lastTodos = null;
     this.currentSpinner = null;
+    this.provider = provider;
+    this.lastPwd = null;
     this.logFileName = `../agent-chat-${
       new Date().toISOString().split("T")[0]
     }.log`;
@@ -32,7 +48,8 @@ class AgentChat {
         chalk.cyan.bold("🤖 Headless Agent Chat Interface") +
           "\n\n" +
           chalk.gray("Type your prompts to interact with the agent.\n") +
-          chalk.gray('Type "exit" or "quit" to leave.'),
+          chalk.gray('Type "exit" or "quit" to leave.\n') +
+          chalk.gray(`Using provider: ${this.provider}`),
         {
           padding: 1,
           margin: 1,
@@ -111,37 +128,54 @@ class AgentChat {
         return chalk.blue("🔧 ") + toolDescription;
 
       case "tool-result":
-        let resultMessage = `${part.toolName} completed`;
+        // Only show results for write_todos to track todo updates, and for errors
         if (part.toolName === "write_todos") {
           const todoCount = part.result.todos ? part.result.todos.length : 0;
-          resultMessage += ` successfully (${todoCount} todos)`;
           // Update the current todos
           if (part.result.todos) {
             this.lastTodos = part.result.todos;
           }
+          return chalk.green("✅ ") + chalk.gray(`todos updated (${todoCount} todos)`);
         } else if (part.toolName === "bash") {
           const exitCode = part.result.exitCode;
-          resultMessage +=
-            exitCode === 0 ? " successfully" : ` with exit code ${exitCode}`;
+          const pwd = part.result.pwd || part.result.workingDirectory;
+          if (exitCode !== 0) {
+            return chalk.red("❌ ") + chalk.red(`bash failed with exit code ${exitCode}`);
+          } else if (pwd) {
+            // Check if working directory changed
+            if (this.lastPwd && this.lastPwd !== pwd) {
+              this.lastPwd = pwd;
+              return chalk.green("✅ ") + chalk.blue("📁 ") + chalk.gray(`directory changed to ${pwd}`);
+            } else {
+              this.lastPwd = pwd;
+              return chalk.green("✅ ") + chalk.gray(`executed in ${pwd}`);
+            }
+          }
         } else if (part.toolName === "str_replace_based_edit_tool") {
-          resultMessage += part.result.includes("Error:")
-            ? " with errors"
-            : " successfully";
+          if (part.result.includes("Error:")) {
+            return chalk.red("❌ ") + chalk.red("edit failed with errors");
+          }
         }
-        return chalk.green("✅ ") + chalk.gray(resultMessage);
+        // Return empty string for successful tool results (don't show anything)
+        return "";
 
       case "tool-error":
         return (
-          chalk.red("❌ ") +
-          chalk.red.bold(part.toolName) +
-          chalk.red(`: ${part.error}`)
+          chalk.red("❌ Tool Error: ") +
+          chalk.red.bold(part.toolName) + "\n" +
+          chalk.red("   Error: ") + chalk.red(part.error)
         );
 
       case "todos":
         if (part.todos && part.todos.length > 0) {
           this.lastTodos = part.todos;
+          
+          // Find the last completed todo
+          const completedTodos = part.todos.filter(todo => todo.status === "completed");
+          const lastCompletedTodo = completedTodos.length > 0 ? completedTodos[completedTodos.length - 1] : null;
+          
           return (
-            chalk.magenta("📋 Todos Updated:\n") +
+            chalk.magenta("📋 Todos Updated ") + chalk.yellow(`(${part.reasoningEffort})`) + "\n" +
             part.todos
               .map((todo) => {
                 const statusIcon =
@@ -150,7 +184,8 @@ class AgentChat {
                     : todo.status === "in_progress"
                     ? "🔄"
                     : "⏳";
-                return `  ${statusIcon} ${todo.description}`;
+                
+                return `  ${statusIcon} ` + chalk.yellow(`(${todo.reasoningEffort})`) + ` ${todo.description}`;
               })
               .join("\n")
           );
@@ -193,12 +228,15 @@ class AgentChat {
       let hasOutput = false;
 
       // Use the SDK query function
+      const model = getModelForProvider(this.provider);
+      const models = createModels(this.provider, model);
+      
       for await (const part of query({
         prompt,
-        // model: "openai/gpt-5-mini-2025-08-07",
         workingDirectory: process.cwd(),
         maxSteps: 200,
         todos: this.lastTodos,
+        models,
       })) {
         if (this.currentSpinner) {
           this.currentSpinner.stop();
@@ -280,15 +318,41 @@ class AgentChat {
 
         await this.executeAgent(prompt);
 
-        console.log(
-          chalk.green("\n✅ Agent finished. Ready for your next prompt!\n")
-        );
       } catch (error) {
-        console.error(chalk.red("\n❌ Error:"), error.message);
-        console.log(chalk.yellow("Ready for your next prompt!\n"));
+        console.error(chalk.red.bold("\n💥 Agent Error:"));
+        console.error(chalk.red("   Message: ") + error.message);
+        if (error.stack) {
+          console.error(chalk.red("   Stack: ") + chalk.gray(error.stack.split('\n').slice(1, 3).join('\n')));
+        }
+        console.log(chalk.yellow("\n🔄 Ready for your next prompt!\n"));
       }
     }
   }
+}
+
+// Parse command line arguments
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let provider = "anthropic"; // default
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--provider" && i + 1 < args.length) {
+      const providerArg = args[i + 1];
+      if (providerArg === "anthropic" || providerArg === "openai" || providerArg === "together") {
+        provider = providerArg;
+      } else {
+        console.error("Error: provider must be 'anthropic', 'openai', or 'together'");
+        process.exit(1);
+      }
+      i++; // Skip the next argument
+    } else if (args[i] === "--help" || args[i] === "-h") {
+      console.log("Usage: node index.js [--provider <provider>]");
+      console.log("  --provider: AI provider to use: anthropic, openai, or together (default: anthropic)");
+      process.exit(0);
+    }
+  }
+
+  return { provider };
 }
 
 // Handle Ctrl+C gracefully
@@ -298,5 +362,6 @@ process.on("SIGINT", () => {
 });
 
 // Start the chat
-const chat = new AgentChat();
+const { provider } = parseArgs();
+const chat = new AgentChat(provider);
 chat.run().catch(console.error);

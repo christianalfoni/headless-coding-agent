@@ -1,22 +1,33 @@
-import { tool } from "ai";
-import { z } from "zod";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 
-const inputSchema = z.object({
-  url: z.string().describe("The URL to fetch and extract text from"),
-  maxBytes: z
-    .number()
-    .optional()
-    .describe("Max bytes to download (default 5MB)"),
-  timeoutMs: z.number().optional().describe("Timeout in milliseconds"),
-}) as any;
-
-export const web_fetch = tool({
+export const web_fetch = () => ({
+  name: "web_fetch",
   description:
     "Fetch a URL and extract the main text using Mozilla Readability.",
-  inputSchema,
-  execute: async (params: z.infer<typeof inputSchema>) => {
+  input_schema: {
+    type: "object",
+    properties: {
+      url: {
+        type: "string",
+        description: "The URL to fetch and extract text from",
+      },
+      maxBytes: {
+        type: "number",
+        description: "Max bytes to download (default 5MB)",
+      },
+      timeoutMs: {
+        type: "number",
+        description: "Timeout in milliseconds",
+      },
+    },
+    required: ["url"],
+  },
+  execute: async (params: {
+    url: string;
+    maxBytes?: number;
+    timeoutMs?: number;
+  }) => {
     const { url, maxBytes = 5 * 1024 * 1024, timeoutMs = 15000 } = params;
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);

@@ -1,5 +1,3 @@
-import { tool } from "ai";
-import { z } from "zod";
 import * as lru from "lru-cache";
 import PQueue from "p-queue";
 import { searxSearch } from "../searx";
@@ -11,23 +9,38 @@ const searchCache = new lru.LRUCache<string, any[]>({
 }); // 10 min
 const searchQueue = new PQueue({ intervalCap: 4, interval: 2000 }); // ≈2 QPS with small bursts
 
-const inputSchema = z.object({
-  query: z
-    .string()
-    .describe('Search query, e.g. "zod refine example site:github.com"'),
-  topK: z.number().optional().describe("Max results to return (1–20)"),
-  language: z
-    .string()
-    .optional()
-    .describe('2-letter language code, e.g. "en", "no"'),
-  safesearch: z.number().optional().describe("0 off, 1 moderate, 2 strict"),
-}) as any;
-
-export const web_search = tool({
+export const web_search = () => ({
+  name: "web_search",
   description:
     "Developer-focused web search via public SearXNG instances (JSON).",
-  inputSchema,
-  execute: async (params: z.infer<typeof inputSchema>) => {
+  input_schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: 'Search query, e.g. "zod refine example site:github.com"',
+      },
+      topK: {
+        type: "number",
+        description: "Max results to return (1–20)",
+      },
+      language: {
+        type: "string",
+        description: '2-letter language code, e.g. "en", "no"',
+      },
+      safesearch: {
+        type: "number",
+        description: "0 off, 1 moderate, 2 strict",
+      },
+    },
+    required: ["query"],
+  },
+  execute: async (params: {
+    query: string;
+    topK?: number;
+    language?: string;
+    safesearch?: number;
+  }) => {
     const { query, topK = 8, language = "en", safesearch = 1 } = params;
     const key = `${language}|${safesearch}|${topK}|${query}`;
     const hit = searchCache.get(key);

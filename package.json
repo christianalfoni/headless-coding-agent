@@ -33,12 +33,15 @@
     "@ai-sdk/google": "^2.0.6",
     "@ai-sdk/mistral": "^2.0.5",
     "@ai-sdk/openai": "^2.0.16",
-    "@ai-sdk/togetherai": "^1.0.7",
+    "@ai-sdk/togetherai": "^1.0.10",
     "@ai-sdk/xai": "^2.0.7",
+    "@anthropic-ai/sdk": "^0.60.0",
     "@mozilla/readability": "^0.6.0",
     "ai": "^5.0.16",
     "jsdom": "^26.1.0",
     "lru-cache": "^11.1.0",
+    "openai": "^5.13.1",
+    "together-ai": "^0.22.0",
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
   }

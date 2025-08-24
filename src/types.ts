@@ -27,7 +27,7 @@ export type WriteTodosCallMessage = {
   type: "tool-call";
   toolCallId: string;
   toolName: "write_todos";
-  args: { todos: Array<{ description: string; context: string }> };
+  args: { todos: Array<{ description: string; reasoningEffort: "high" | "medium" | "low" }> };
 };
 
 export type BashToolCallMessage = {
@@ -170,6 +170,7 @@ export type ErrorMessage = { type: "error"; error: string } & SessionInfo;
 export type TodosMessage = {
   type: "todos";
   todos: Todo[];
+  reasoningEffort: "high" | "medium" | "low";
 };
 
 export type Message = PromptMessage | TodosMessage | CompletedMessage;
@@ -189,4 +190,5 @@ export interface Todo {
   context: string;
   status: "pending" | "in_progress" | "completed";
   summary?: string;
+  reasoningEffort: "high" | "medium" | "low";
 }

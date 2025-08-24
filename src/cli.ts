@@ -1,13 +1,27 @@
 #!/usr/bin/env node
 
 import { query, Todo } from "./index";
+import { createModels } from "./prompts";
+
+function getModelForProvider(provider: "anthropic" | "openai" | "together"): string {
+  switch (provider) {
+    case "anthropic":
+      return "claude-3-5-sonnet-20241022";
+    case "openai":
+      return "gpt-4o";
+    case "together":
+      return "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo";
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
+  }
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
   let prompt = "";
   let format = false;
   let maxSteps: number | undefined;
-  let model: string | undefined;
+  let provider: "anthropic" | "openai" | "together" = "anthropic";
   let planningModel: string | undefined;
   let initialTodos: Todo[] | undefined;
 
@@ -24,8 +38,20 @@ function parseArgs() {
         process.exit(1);
       }
       i++; // Skip the next argument
-    } else if (args[i] === "--model" && i + 1 < args.length) {
-      model = args[i + 1];
+    } else if (args[i] === "--provider" && i + 1 < args.length) {
+      const providerArg = args[i + 1];
+      if (
+        providerArg === "anthropic" ||
+        providerArg === "openai" ||
+        providerArg === "together"
+      ) {
+        provider = providerArg;
+      } else {
+        console.error(
+          "Error: provider must be 'anthropic', 'openai', or 'together'"
+        );
+        process.exit(1);
+      }
       i++; // Skip the next argument
     } else if (args[i] === "--planningModel" && i + 1 < args.length) {
       planningModel = args[i + 1];
@@ -67,7 +93,7 @@ function parseArgs() {
 
   if (!prompt) {
     console.error(
-      'Usage: agent --prompt "your prompt here" [--format] [--maxSteps <number>] [--model <string>] [--planningModel <string>] [--todos <json>]'
+      'Usage: agent --prompt "your prompt here" [--format] [--maxSteps <number>] [--provider <string>] [--todos <json>]'
     );
     console.error("  --prompt: prompt to send to the agent");
     console.error("  --format: format JSON output (pretty print)");
@@ -75,7 +101,7 @@ function parseArgs() {
       "  --maxSteps: maximum number of AI steps (default: unlimited)"
     );
     console.error(
-      "  --model: AI model to use (default: anthropic/claude-3-5-sonnet-20241022)"
+      "  --provider: AI provider to use: anthropic, openai, or together (default: anthropic)"
     );
     console.error(
       "  --todos: JSON array of initial todos for session continuation"
@@ -83,19 +109,22 @@ function parseArgs() {
     process.exit(1);
   }
 
-  return { prompt, format, maxSteps, model, planningModel, initialTodos };
+  return { prompt, format, maxSteps, provider, planningModel, initialTodos };
 }
 
 async function main() {
   try {
-    const { prompt, format, maxSteps, model, initialTodos } = parseArgs();
+    const { prompt, format, maxSteps, provider, initialTodos } = parseArgs();
+
+    const model = getModelForProvider(provider);
+    const models = createModels(provider, model);
 
     const stream = query({
       prompt,
       workingDirectory: process.cwd(),
       maxSteps,
-      model,
       todos: initialTodos,
+      models,
     });
 
     for await (const part of stream) {
