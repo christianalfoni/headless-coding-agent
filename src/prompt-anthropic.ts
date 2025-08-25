@@ -74,8 +74,14 @@ export async function* streamPrompt(config: {
           : undefined,
       });
 
-      totalInputTokens += response.usage.input_tokens;
-      totalOutputTokens += response.usage.output_tokens;
+      const responseInputTokens = response.usage.input_tokens;
+      const responseOutputTokens = response.usage.output_tokens;
+      totalInputTokens += responseInputTokens;
+      totalOutputTokens += responseOutputTokens;
+
+      // Calculate cost for this response and call step
+      const responseCost = (responseInputTokens * 0.0003) + (responseOutputTokens * 0.0015);
+      config.session.step(responseInputTokens, responseOutputTokens, responseCost);
 
       // Handle thinking content blocks
       const thinkingBlocks = response.content.filter(
@@ -129,7 +135,6 @@ export async function* streamPrompt(config: {
         break;
       }
 
-      config.session.step();
       stepCount++;
 
       // Add the assistant's response as is
@@ -176,12 +181,6 @@ export async function* streamPrompt(config: {
 
             // Return early if configured to do so
             if (config.returnOnToolResult && toolUse.name === config.returnOnToolResult) {
-              const cost = (totalInputTokens * 0.0003) + (totalOutputTokens * 0.0015);
-              config.session.increaseTokens(
-                totalInputTokens,
-                totalOutputTokens,
-                cost
-              );
               return finalTextOutput;
             }
 
@@ -226,10 +225,6 @@ export async function* streamPrompt(config: {
         // Don't add anything to messages yet, let the loop continue
       }
     }
-
-    // Update session with token usage
-    const cost = (totalInputTokens * 0.0003) + (totalOutputTokens * 0.0015);
-    config.session.increaseTokens(totalInputTokens, totalOutputTokens, cost);
 
     return finalTextOutput;
   } catch (error) {

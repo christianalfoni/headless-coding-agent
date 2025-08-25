@@ -62,8 +62,14 @@ export class Session {
     this.reasoningEffort = "medium"; // default value
   }
 
-  step(): void {
+  step(inputTokens: number, outputTokens: number, costCents: number): void {
     this.stepCount++;
+    
+    // Update token counts
+    this.inputTokens += inputTokens;
+    this.outputTokens += outputTokens;
+    this.totalCostCents += costCents;
+    
     if (this.env.maxSteps && this.stepCount > this.env.maxSteps) {
       throw new Error(
         `Maximum steps exceeded: ${this.stepCount}/${this.env.maxSteps}`
@@ -71,17 +77,6 @@ export class Session {
     }
   }
 
-  increaseTokens(
-    inputTokens: number,
-    outputTokens: number,
-    costCents?: number
-  ): void {
-    this.inputTokens += inputTokens;
-    this.outputTokens += outputTokens;
-    if (costCents !== undefined) {
-      this.totalCostCents += costCents;
-    }
-  }
 
   getMaxSteps(): number | undefined {
     return this.env.maxSteps;

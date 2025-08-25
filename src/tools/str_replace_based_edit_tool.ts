@@ -69,8 +69,7 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
             // Check if path is a directory
             const stats = await fs.stat(filePath);
             if (stats.isDirectory()) {
-              const files = await fs.readdir(filePath);
-              return files.join("\n");
+              return "Error: Cannot view directories. Use bash commands like 'ls' to list directory contents.";
             }
 
             const content = await fs.readFile(filePath, "utf8");

@@ -76,8 +76,14 @@ export async function* streamPrompt(config: {
         parallel_tool_calls: config.planningMode ? false : undefined,
       });
 
-      totalInputTokens += response.usage?.input_tokens || 0;
-      totalOutputTokens += response.usage?.output_tokens || 0;
+      const responseInputTokens = response.usage?.input_tokens || 0;
+      const responseOutputTokens = response.usage?.output_tokens || 0;
+      totalInputTokens += responseInputTokens;
+      totalOutputTokens += responseOutputTokens;
+
+      // Calculate cost for this response and call step
+      const responseCost = (responseInputTokens * 0.000125) + (responseOutputTokens * 0.001);
+      config.session.step(responseInputTokens, responseOutputTokens, responseCost);
 
       if (!response.output || response.output.length === 0) break;
 
@@ -129,7 +135,6 @@ export async function* streamPrompt(config: {
         break;
       }
 
-      config.session.step();
       stepCount++;
 
       // Process tool calls
@@ -182,13 +187,6 @@ export async function* streamPrompt(config: {
               config.returnOnToolResult &&
               name === config.returnOnToolResult
             ) {
-              const cost =
-                totalInputTokens * 0.000125 + totalOutputTokens * 0.001;
-              config.session.increaseTokens(
-                totalInputTokens,
-                totalOutputTokens,
-                cost
-              );
               return finalTextOutput;
             }
 
@@ -228,10 +226,6 @@ export async function* streamPrompt(config: {
         continue;
       }
     }
-
-    // Update session with token usage
-    const cost = totalInputTokens * 0.0003 + totalOutputTokens * 0.0015;
-    config.session.increaseTokens(totalInputTokens, totalOutputTokens, cost);
 
     return finalTextOutput;
   } catch (error) {
