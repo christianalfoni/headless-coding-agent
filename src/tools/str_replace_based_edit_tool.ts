@@ -64,15 +64,19 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
       view_range?: [number, number];
     }) => {
       try {
+        // Resolve the file path relative to the working directory if it's not absolute
+        const resolvedFilePath = path.isAbsolute(filePath)
+          ? filePath
+          : path.join(workingDirectory, filePath);
         switch (command) {
           case "view":
             // Check if path is a directory
-            const stats = await fs.stat(filePath);
+            const stats = await fs.stat(resolvedFilePath);
             if (stats.isDirectory()) {
               return "Error: Cannot view directories. Use bash commands like 'ls' to list directory contents.";
             }
 
-            const content = await fs.readFile(filePath, "utf8");
+            const content = await fs.readFile(resolvedFilePath, "utf8");
             const lines = content.split("\n");
 
             if (view_range && view_range.length === 2) {
@@ -88,34 +92,44 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
               return "Error: file_text is required for create command";
             }
 
+            // Check if file already exists
+            try {
+              await fs.access(resolvedFilePath);
+              return `Error: File '${filePath}' already exists. Use str_replace or view command instead.`;
+            } catch {
+              // File doesn't exist, proceed with creation
+            }
+
             // Ensure directory exists
-            const dir = path.dirname(filePath);
+            const dir = path.dirname(resolvedFilePath);
             await fs.mkdir(dir, { recursive: true });
 
-            await fs.writeFile(filePath, file_text, "utf8");
-            return "success";
+            await fs.writeFile(resolvedFilePath, file_text, "utf8");
+            return `File '${filePath}' created successfully with ${
+              file_text.split("\n").length
+            } lines.`;
 
           case "str_replace":
             if (!old_str || new_str === undefined) {
               return "Error: old_str and new_str are required for str_replace command";
             }
 
-            const existingContent = await fs.readFile(filePath, "utf8");
+            const existingContent = await fs.readFile(resolvedFilePath, "utf8");
 
             if (!existingContent.includes(old_str)) {
               return "Error: old_str not found in file";
             }
 
             const replacedContent = existingContent.replace(old_str, new_str);
-            await fs.writeFile(filePath, replacedContent, "utf8");
-            return "success";
+            await fs.writeFile(resolvedFilePath, replacedContent, "utf8");
+            return `String replacement completed successfully in '${filePath}'.`;
 
           case "insert":
             if (insert_line === undefined || new_str === undefined) {
               return "Error: insert_line and new_str are required for insert command";
             }
 
-            const fileContent = await fs.readFile(filePath, "utf8");
+            const fileContent = await fs.readFile(resolvedFilePath, "utf8");
             const fileLines = fileContent.split("\n");
 
             if (insert_line < 0 || insert_line > fileLines.length) {
@@ -123,8 +137,8 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
             }
 
             fileLines.splice(insert_line, 0, new_str);
-            await fs.writeFile(filePath, fileLines.join("\n"), "utf8");
-            return "success";
+            await fs.writeFile(resolvedFilePath, fileLines.join("\n"), "utf8");
+            return `Line inserted successfully at line ${insert_line} in '${filePath}'.`;
 
           default:
             return `Error: Unknown command '${command}'`;

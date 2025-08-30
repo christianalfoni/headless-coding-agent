@@ -144,25 +144,18 @@ class AgentChat {
           );
         } else if (part.toolName === "bash") {
           const exitCode = part.result.exitCode;
-          const pwd = part.result.pwd || part.result.workingDirectory;
+          const stderr = part.result.stderr;
+          const stdout = part.result.stdout;
+          
           if (exitCode !== 0) {
-            return (
-              chalk.red("❌ ") +
-              chalk.red(`bash failed with exit code ${exitCode}`)
-            );
-          } else if (pwd) {
-            // Check if working directory changed
-            if (this.lastPwd && this.lastPwd !== pwd) {
-              this.lastPwd = pwd;
-              return (
-                chalk.green("✅ ") +
-                chalk.blue("📁 ") +
-                chalk.gray(`directory changed to ${pwd}`)
-              );
-            } else {
-              this.lastPwd = pwd;
-              return ""; // Don't show anything for successful commands
+            let errorMsg = chalk.red(`bash failed with exit code ${exitCode}`);
+            if (stderr && stderr.trim()) {
+              errorMsg += "\n" + chalk.red("   stderr: ") + chalk.gray(stderr.trim());
             }
+            if (stdout && stdout.trim()) {
+              errorMsg += "\n" + chalk.red("   stdout: ") + chalk.gray(stdout.trim());
+            }
+            return chalk.red("❌ ") + errorMsg;
           }
         } else if (part.toolName === "str_replace_based_edit_tool") {
           if (part.result.includes("Error:")) {

@@ -13,7 +13,7 @@ export async function* streamPrompt(config: {
   tools: Record<string, any>;
   maxSteps?: number;
   planningMode?: boolean;
-  reasoningEffort?: "minimal" | "low" | "medium" | "high";
+  reasoningEffort?: "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
   returnOnToolResult?: string;
 }): AsyncGenerator<
@@ -80,8 +80,13 @@ export async function* streamPrompt(config: {
       totalOutputTokens += responseOutputTokens;
 
       // Calculate cost for this response and call step
-      const responseCost = (responseInputTokens * 0.0003) + (responseOutputTokens * 0.0015);
-      config.session.step(responseInputTokens, responseOutputTokens, responseCost);
+      const responseCost =
+        responseInputTokens * 0.0003 + responseOutputTokens * 0.0015;
+      config.session.step(
+        responseInputTokens,
+        responseOutputTokens,
+        responseCost
+      );
 
       // Handle thinking content blocks
       const thinkingBlocks = response.content.filter(
@@ -180,7 +185,10 @@ export async function* streamPrompt(config: {
             yield toolResultMessage;
 
             // Return early if configured to do so
-            if (config.returnOnToolResult && toolUse.name === config.returnOnToolResult) {
+            if (
+              config.returnOnToolResult &&
+              toolUse.name === config.returnOnToolResult
+            ) {
               return finalTextOutput;
             }
 

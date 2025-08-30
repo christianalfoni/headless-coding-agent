@@ -13,7 +13,7 @@ export async function* streamPrompt(config: {
   tools: Record<string, any>;
   maxSteps?: number;
   planningMode?: boolean;
-  reasoningEffort?: "minimal" | "low" | "medium" | "high";
+  reasoningEffort?: "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
   returnOnToolResult?: string;
 }): AsyncGenerator<
@@ -27,12 +27,12 @@ export async function* streamPrompt(config: {
     // Convert tools from Anthropic format to OpenAI format
     const openaiTools = Object.values(config.tools).map((tool) => ({
       type: "function" as const,
-      id: tool.id,
       function: {
         name: tool.name,
         description: tool.description,
-        arguments: tool.input_schema,
+        parameters: tool.input_schema,
       },
+      strict: tool.name === "write_todos",
     }));
 
     let messages: Array<{
@@ -63,12 +63,15 @@ export async function* streamPrompt(config: {
     // Main conversation loop - continues only when there are tool calls to process
     while (true) {
       const response = await client.chat.completions.create({
-        model: "deepseek-ai/DeepSeek-V3",
+        model: "deepseek-ai/DeepSeek-R1",
         max_tokens: 4000,
         messages: messages as any,
+        reasoning_effort:
+          config.reasoningEffort === "low" ? undefined : config.reasoningEffort,
         tools: openaiTools.length > 0 ? openaiTools : undefined,
-        tool_choice: "auto",
+        tool_choice: openaiTools.length > 0 ? "auto" : undefined,
         stream: false,
+        temperature: config.reasoningEffort === "low" ? 0.2 : undefined,
       });
 
       const responseInputTokens = response.usage?.prompt_tokens || 0;
@@ -76,9 +79,14 @@ export async function* streamPrompt(config: {
       totalInputTokens += responseInputTokens;
       totalOutputTokens += responseOutputTokens;
 
-      // Calculate cost for this response and call step
-      const responseCost = (responseInputTokens * 0.0003) + (responseOutputTokens * 0.0015);
-      config.session.step(responseInputTokens, responseOutputTokens, responseCost);
+      // Calculate cost for this response and call step (Together AI pricing for DeepSeek-V3)
+      const responseCost =
+        responseInputTokens * 0.0002 + responseOutputTokens * 0.0002;
+      config.session.step(
+        responseInputTokens,
+        responseOutputTokens,
+        responseCost
+      );
 
       const choice = response.choices[0];
       if (!choice?.message) break;
@@ -164,7 +172,10 @@ export async function* streamPrompt(config: {
             yield toolResultMessage;
 
             // Return early if configured to do so
-            if (config.returnOnToolResult && toolCall.function.name === config.returnOnToolResult) {
+            if (
+              config.returnOnToolResult &&
+              toolCall.function.name === config.returnOnToolResult
+            ) {
               return finalTextOutput;
             }
 

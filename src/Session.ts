@@ -18,7 +18,6 @@ import { bash } from "./tools/bash";
 import { str_replace_based_edit_tool } from "./tools/str_replace_based_edit_tool";
 import { web_search } from "./tools/web_search";
 import { web_fetch } from "./tools/web_fetch";
-import { estimateReasoningEffort } from "./estimateReasoningEffort";
 
 export class Session {
   static async *create(
@@ -64,19 +63,18 @@ export class Session {
 
   step(inputTokens: number, outputTokens: number, costCents: number): void {
     this.stepCount++;
-    
+
     // Update token counts
     this.inputTokens += inputTokens;
     this.outputTokens += outputTokens;
     this.totalCostCents += costCents;
-    
+
     if (this.env.maxSteps && this.stepCount > this.env.maxSteps) {
       throw new Error(
         `Maximum steps exceeded: ${this.stepCount}/${this.env.maxSteps}`
       );
     }
   }
-
 
   getMaxSteps(): number | undefined {
     return this.env.maxSteps;
@@ -212,10 +210,8 @@ IMPORTANT:
 - Do not create testing todos - each todo handles its own verification internally
 - Focus on essential work that directly fulfills the request`;
 
-    // Estimate reasoning effort based on the prompt content
-    const effortEstimate = estimateReasoningEffort(basePrompt);
-    // Store reasoning effort on the session
-    this.reasoningEffort = effortEstimate.suggested.reasoningEffort;
+    // Evaluate reasoning effort using the new evaluatePrompt method
+    this.reasoningEffort = await this.evaluatePrompt(basePrompt);
 
     const modelConfig = await this.models.evaluateTodos({
       workspacePath: this.env.workingDirectory,
@@ -238,7 +234,7 @@ IMPORTANT:
         bash: bash(this.env.workingDirectory),
       },
       planningMode: true,
-      reasoningEffort: effortEstimate.suggested.reasoningEffort,
+      reasoningEffort: this.reasoningEffort,
       verbosity: "low",
       returnOnToolResult: "write_todos",
     });
@@ -343,8 +339,55 @@ IMPORTANT:
         write_todos: write_todos(),
       },
       maxSteps: this.getMaxSteps(),
-      reasoningEffort: "minimal",
       verbosity: "medium",
     }) as AsyncGenerator<TextMessage | ReasoningMessage, string>;
+  }
+
+  async evaluatePrompt(prompt: string): Promise<"low" | "medium" | "high"> {
+    const systemPrompt = `You are evaluating the reasoning effort required to define todos for a given prompt. 
+
+Analyze the prompt and determine the complexity level based on:
+- Low: Simple, single-step tasks (e.g., "fix this typo", "add a comment")
+- Medium: Multi-step tasks requiring some planning (e.g., "add a new feature", "refactor a component") 
+- High: Complex tasks requiring extensive planning and coordination (e.g., "redesign the architecture", "implement a complex system")
+
+Respond with only one word: "low", "medium", or "high". Do not include any additional text or explanation.`;
+
+    const modelConfig = await this.models.evaluateTodos({
+      workspacePath: this.env.workingDirectory,
+      todos: [],
+      prompt,
+    });
+
+    const streamPromptFn = this.getStreamPromptForProvider(
+      modelConfig.provider
+    );
+
+    let result = "";
+    const stream = streamPromptFn({
+      session: this,
+      system: systemPrompt,
+      prompt,
+      tools: {},
+      verbosity: "low",
+    });
+
+    for await (const part of stream) {
+      if (part.type === "text") {
+        result += part.text;
+      }
+    }
+
+    const trimmedResult = result.trim().toLowerCase();
+
+    if (trimmedResult.includes("low")) {
+      return "low";
+    }
+
+    if (trimmedResult.includes("high")) {
+      return "high";
+    }
+
+    return "medium";
   }
 }

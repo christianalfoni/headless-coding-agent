@@ -13,7 +13,7 @@ export async function* streamPrompt(config: {
   tools: Record<string, any>;
   maxSteps?: number;
   planningMode?: boolean;
-  reasoningEffort?: "minimal" | "low" | "medium" | "high";
+  reasoningEffort?: "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
   returnOnToolResult?: string;
 }): AsyncGenerator<
@@ -61,18 +61,20 @@ export async function* streamPrompt(config: {
     // Main conversation loop - continues only when there are tool calls to process
     while (true) {
       const response = await client.responses.create({
-        model: "gpt-5",
+        model: "o4-mini",
         input: nextInput,
         previous_response_id: previousResponseId,
-        reasoning: config.reasoningEffort && config.reasoningEffort !== "minimal" ? {
-          effort: config.reasoningEffort,
-          summary: "auto",
-        } : undefined,
+        reasoning: config.reasoningEffort
+          ? {
+              effort: config.reasoningEffort,
+              summary: "auto",
+            }
+          : undefined,
         text: {
-          verbosity: config.verbosity || "medium",
+          verbosity: /*config.verbosity ||*/ "medium",
         },
         tools: openaiTools.length > 0 ? openaiTools : undefined,
-        tool_choice: "auto",
+        tool_choice: openaiTools.length > 0 ? "auto" : undefined,
         parallel_tool_calls: config.planningMode ? false : undefined,
       });
 
@@ -82,8 +84,13 @@ export async function* streamPrompt(config: {
       totalOutputTokens += responseOutputTokens;
 
       // Calculate cost for this response and call step
-      const responseCost = (responseInputTokens * 0.000125) + (responseOutputTokens * 0.001);
-      config.session.step(responseInputTokens, responseOutputTokens, responseCost);
+      const responseCost =
+        responseInputTokens * 0.000125 + responseOutputTokens * 0.01;
+      config.session.step(
+        responseInputTokens,
+        responseOutputTokens,
+        responseCost
+      );
 
       if (!response.output || response.output.length === 0) break;
 
