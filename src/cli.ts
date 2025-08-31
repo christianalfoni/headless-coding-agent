@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { query, Todo } from "./index";
-import { createModels } from "./prompts";
+import { query, Todo } from "./index.js";
+import { createModels } from "./prompts.js";
 
 function getModelForProvider(provider: "anthropic" | "openai" | "together"): string {
   switch (provider) {

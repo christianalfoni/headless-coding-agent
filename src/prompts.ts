@@ -1,14 +1,13 @@
-import { ModelPromptFunction } from "./index";
+import { ModelPromptFunction } from "./index.js";
 
 export function createModels(
   provider: "anthropic" | "openai" | "together",
   model: string
 ): ModelPromptFunction {
   return {
-    evaluateTodos: async ({ workspacePath, todos, prompt }) => ({
-      model,
-      provider,
-      systemPrompt: `You are an AI assistant that breaks down user requests into properly scoped, sequential todos. You are working in: ${workspacePath}
+    evaluateTodos: async ({ workspacePath, todos, prompt, todosContext, hasCompletedTodos, hasPendingTodos }) => {
+      // Base system prompt for fresh starts (no existing todos)
+      let systemPrompt = `You are an AI assistant that breaks down user requests into properly scoped, sequential todos. You are working in: ${workspacePath}
 
 Your task is to evaluate the amount of work required and create sequential todos with appropriate scope. Each todo should represent a reasonable amount of work that can be completed in one focused session.
 
@@ -23,17 +22,22 @@ Guidelines for creating todos:
 - NEVER create test files or test code unless explicitly requested or the project already has existing tests
 - AVOID todos like "run tests", "verify changes", "check functionality", "create tests", "write unit tests"
 
-Guidelines for the context field:
-- Explain how this todo fits into the sequential plan and why it comes at this point
-- Describe what this todo enables or prepares for the next steps
-- Keep context focused on the todo's role in the overall sequence
-- Example: "Establishes the core data structures needed before implementing the API endpoints"
-
 Focus on quality scope - not too many tiny steps, not too few massive ones. Break work down based on logical dependencies and reasonable work amounts.
 
-Always use the writeTodos tool to provide the updated list of pending todos needed to complete the user's request.`,
-      prompt,
-    }),
+Use the writeTodos tool to provide the list of pending todos needed to complete the user's request. If no todos are needed (the request is already complete or requires no action), you can respond directly without creating todos.`;
+
+      // Add context-specific instructions only when there are existing todos
+      if (hasCompletedTodos || hasPendingTodos) {
+        systemPrompt += `\n\nCURRENT TODOS STATE:\n${todosContext}\n\nYour task is to evaluate the current pending todos based on what has been completed and provide an updated list of todos needed to complete the request.\n\nIMPORTANT FOR TODO EVALUATION:\n- Review completed todos and their summaries to understand what work has already been done\n- Evaluate remaining pending todos to see if they still make sense given the completed work\n- Create, modify, or remove todos as needed to efficiently complete the user's request\n- Ensure todos are properly scoped and have logical dependencies\n- Do not create testing todos - each todo handles its own verification internally\n- Focus on essential work that directly fulfills the request`;
+      }
+
+      return {
+        model,
+        provider,
+        systemPrompt,
+        prompt,
+      };
+    },
 
     executeTodo: async ({ workspacePath, todo, todos }) => {
       const remainingPendingTodos = todos.filter((t) => t.status === "pending");
@@ -53,7 +57,7 @@ Working directory: ${workspacePath}
 
 CRITICAL: You must ONLY do what is described in the todo. Do not go beyond the scope of the todo description. Do not add extra features, improvements, or related work unless explicitly mentioned in the todo itself.${remainingTodosContext}
 
-IMPORTANT: When the todo is ambiguous, ask for clarification rather than making assumptions. Prefer conservative, minimal actions over comprehensive solutions. Focus strictly on the described task and nothing more.
+IMPORTANT: When the todo is ambiguous, make reasonable assumptions based on context and common practices rather than asking for clarification. Always proceed with implementation using your best judgment. Prefer conservative, minimal actions over comprehensive solutions. Focus strictly on the described task and nothing more.
 
 DEVELOPMENT SERVER RESTRICTIONS:
 - NEVER run development servers or watch commands (npm run dev, yarn dev, npm start, yarn start, pnpm dev, etc.)

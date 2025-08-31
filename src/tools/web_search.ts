@@ -1,9 +1,9 @@
-import * as lru from "lru-cache";
-import PQueue from "p-queue";
-import { searxSearch } from "../searx";
+import { LRUCache } from "lru-cache";
+import { default as PQueue } from "p-queue";
+import { searxSearch } from "../searx.js";
 
 // Small in-memory cache & throttle
-const searchCache = new lru.LRUCache<string, any[]>({
+const searchCache = new LRUCache<string, any[]>({
   max: 500,
   ttl: 10 * 60 * 1000,
 }); // 10 min

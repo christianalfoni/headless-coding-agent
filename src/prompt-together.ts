@@ -1,10 +1,18 @@
-import { Together } from "together-ai";
+import { prompt as harmonyPrompt } from "./together-harmony-sdk.js";
+import { Message } from "openai-harmony";
 import {
   PromptMessage,
   WriteTodosCallMessage,
   WriteTodosResultMessage,
-} from "./types";
-import { Session } from "./Session";
+} from "./types.js";
+import { Session } from "./Session.js";
+
+/**
+ * Simple Together AI with Harmony integration
+ * 
+ * This version uses the together-harmony-sdk for basic conversation
+ * without tool calling support.
+ */
 
 export async function* streamPrompt(config: {
   session: Session;
@@ -20,200 +28,100 @@ export async function* streamPrompt(config: {
   PromptMessage | WriteTodosCallMessage | WriteTodosResultMessage
 > {
   try {
-    const client = new Together({
-      apiKey: process.env.TOGETHER_API_KEY,
-    });
-
-    // Convert tools from Anthropic format to OpenAI format
-    const openaiTools = Object.values(config.tools).map((tool) => ({
-      type: "function" as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.input_schema,
+    // Create harmony-compliant messages
+    const messages: Message[] = [
+      { 
+        role: "system", 
+        content: [{ 
+          type: "text", 
+          text: config.system
+        }] 
       },
-      strict: tool.name === "write_todos",
-    }));
-
-    let messages: Array<{
-      role: "system" | "user" | "assistant" | "tool";
-      content: string | null;
-      tool_calls?: any[];
-      tool_call_id?: string;
-    }> = [
-      {
-        role: "system",
-        content: config.system,
-      },
-      {
-        role: "user",
-        content: config.prompt,
+      { 
+        role: "user", 
+        content: [{ 
+          type: "text", 
+          text: config.prompt
+        }] 
       },
     ];
 
-    let stepCount = 0;
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-    let finalTextOutput = "";
+    // Add preamble with commentary channel if in planning mode
+    if (config.planningMode) {
+      messages.push({
+        role: "assistant",
+        content: [{
+          type: "text",
+          text: "<|channel|>commentary<|message|>I'll help you plan this task step by step.<|end|>"
+        }]
+      });
+    }
 
     const sessionInfo = {
       sessionId: config.session.sessionId,
     };
 
-    // Main conversation loop - continues only when there are tool calls to process
-    while (true) {
-      const response = await client.chat.completions.create({
-        model: "deepseek-ai/DeepSeek-R1",
-        max_tokens: 4000,
-        messages: messages as any,
-        reasoning_effort:
-          config.reasoningEffort === "low" ? undefined : config.reasoningEffort,
-        tools: openaiTools.length > 0 ? openaiTools : undefined,
-        tool_choice: openaiTools.length > 0 ? "auto" : undefined,
-        stream: false,
-        temperature: config.reasoningEffort === "low" ? 0.2 : undefined,
-      });
+    // Call the harmony SDK
+    const response = await harmonyPrompt({
+      messages,
+      reasoningEffort: config.reasoningEffort,
+    });
+    const responseContent = response.content;
 
-      const responseInputTokens = response.usage?.prompt_tokens || 0;
-      const responseOutputTokens = response.usage?.completion_tokens || 0;
-      totalInputTokens += responseInputTokens;
-      totalOutputTokens += responseOutputTokens;
+    // Process each content item from the harmony response
+    for (const content of responseContent) {
+      if (content.type === "text") {
+        // Check if this is a channeled message and extract appropriate content
+        let text = content.text;
+        let messageType: "text" | "reasoning" = "text";
 
-      // Calculate cost for this response and call step (Together AI pricing for DeepSeek-V3)
-      const responseCost =
-        responseInputTokens * 0.0002 + responseOutputTokens * 0.0002;
-      config.session.step(
-        responseInputTokens,
-        responseOutputTokens,
-        responseCost
-      );
+        // Handle analysis channel (reasoning)
+        if (text.includes("<|channel|>analysis<|message|>")) {
+          const analysisMatch = text.match(/<\|channel\|>analysis<\|message\|>(.*?)(?:<\|end\|>|$)/s);
+          if (analysisMatch && analysisMatch[1]) {
+            text = analysisMatch[1].trim();
+            messageType = "reasoning";
+          }
+        }
+        // Handle commentary channel (keep as text but might be preamble)
+        else if (text.includes("<|channel|>commentary<|message|>")) {
+          const commentaryMatch = text.match(/<\|channel\|>commentary<\|message\|>(.*?)(?:<\|end\|>|$)/s);
+          if (commentaryMatch && commentaryMatch[1]) {
+            text = commentaryMatch[1].trim();
+          }
+        }
+        // Handle final channel (default user-facing content)
+        else if (text.includes("<|channel|>final<|message|>")) {
+          const finalMatch = text.match(/<\|channel\|>final<\|message\|>(.*?)(?:<\|end\|>|$)/s);
+          if (finalMatch && finalMatch[1]) {
+            text = finalMatch[1].trim();
+          }
+        }
 
-      const choice = response.choices[0];
-      if (!choice?.message) break;
-
-      // Handle text content
-      const textContent = choice.message.content;
-      if (textContent) {
         const textMessage: PromptMessage = {
-          type: "text",
-          text: textContent,
+          type: messageType,
+          text: text,
           ...sessionInfo,
         };
         yield textMessage;
-        finalTextOutput = textContent;
       }
-
-      // Handle tool calls
-      const toolCalls = choice.message.tool_calls || [];
-      const hasToolCalls = toolCalls.length > 0;
-
-      if (!hasToolCalls) {
-        // No tool calls, conversation is complete
-        break;
-      }
-
-      // Check step limits when we continue the loop
-      if (config.maxSteps && stepCount >= config.maxSteps) {
-        break;
-      }
-
-      stepCount++;
-
-      // Add assistant's response to messages for continuation
-      messages.push({
-        role: "assistant",
-        content: textContent,
-        tool_calls: toolCalls,
-      });
-
-      // Process tool calls
-      if (hasToolCalls) {
-        const toolResults: any[] = [];
-
-        for (const toolCall of toolCalls) {
-          if (!toolCall.id || !toolCall.function?.name) continue;
-
-          // Yield tool call message
-          let parsedArgs;
-          try {
-            parsedArgs = JSON.parse(toolCall.function.arguments || "{}");
-          } catch {
-            parsedArgs = {};
-          }
-
-          const toolCallMessage: PromptMessage = {
-            type: "tool-call",
-            toolCallId: toolCall.id,
-            toolName: toolCall.function.name as any,
-            args: parsedArgs,
-            ...sessionInfo,
-          } as any;
-          yield toolCallMessage;
-
-          try {
-            // Execute the tool
-            const tool = Object.values(config.tools).find(
-              (t) => t.name === toolCall.function.name
-            );
-            if (!tool) {
-              throw new Error(`Tool ${toolCall.function.name} not found`);
-            }
-
-            const result = await tool.execute(parsedArgs);
-
-            // Yield tool result message
-            const toolResultMessage: PromptMessage = {
-              type: "tool-result",
-              toolCallId: toolCall.id,
-              toolName: toolCall.function.name as any,
-              result,
-              ...sessionInfo,
-            } as any;
-            yield toolResultMessage;
-
-            // Return early if configured to do so
-            if (
-              config.returnOnToolResult &&
-              toolCall.function.name === config.returnOnToolResult
-            ) {
-              return finalTextOutput;
-            }
-
-            toolResults.push({
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content:
-                typeof result === "string" ? result : JSON.stringify(result),
-            });
-          } catch (error) {
-            // Yield tool error message
-            const toolErrorMessage: PromptMessage = {
-              type: "tool-error",
-              toolCallId: toolCall.id,
-              toolName: toolCall.function.name as any,
-              error: error instanceof Error ? error.message : String(error),
-              ...sessionInfo,
-            } as any;
-            yield toolErrorMessage;
-
-            toolResults.push({
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: `Error: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            });
-          }
-        }
-
-        // Add tool results to messages
-        if (toolResults.length > 0) {
-          messages.push(...toolResults);
-        }
-      }
+      // Note: Other types (system_content, developer_content) are ignored for now
     }
 
-    return finalTextOutput;
+    // Update session with actual usage from API response
+    const inputTokens = response.inputTokens;
+    const outputTokens = response.outputTokens;
+    
+    // Calculate cost based on Together AI pricing for gpt-oss-120b
+    // $0.15 input / $0.60 output per million tokens, converted to cents
+    const cost = (inputTokens * 0.15 / 10000) + (outputTokens * 0.60 / 10000);
+    
+    config.session.step(inputTokens, outputTokens, cost);
+
+    // Return the final text output
+    const textContent = responseContent.find(c => c.type === "text");
+    return textContent && "text" in textContent ? textContent.text : "";
+    
   } catch (error) {
     const errorMessage: PromptMessage = {
       type: "error",

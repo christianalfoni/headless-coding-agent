@@ -3,8 +3,8 @@ import {
   PromptMessage,
   WriteTodosCallMessage,
   WriteTodosResultMessage,
-} from "./types";
-import { Session } from "./Session";
+} from "./types.js";
+import { Session } from "./Session.js";
 
 export async function* streamPrompt(config: {
   session: Session;

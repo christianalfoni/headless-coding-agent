@@ -7,17 +7,17 @@ import {
   TextMessage,
   ReasoningMessage,
   CompletedMessage,
-} from "./types";
-import { SessionEnvironment } from "./Environment";
-import { streamPrompt as streamPromptAnthropic } from "./prompt-anthropic";
-import { streamPrompt as streamPromptOpenAI } from "./prompt-openai";
-import { streamPrompt as streamPromptTogether } from "./prompt-together";
-import { ModelPromptFunction } from "./index";
-import { write_todos } from "./tools/write_todos";
-import { bash } from "./tools/bash";
-import { str_replace_based_edit_tool } from "./tools/str_replace_based_edit_tool";
-import { web_search } from "./tools/web_search";
-import { web_fetch } from "./tools/web_fetch";
+} from "./types.js";
+import { SessionEnvironment } from "./Environment.js";
+import { streamPrompt as streamPromptAnthropic } from "./prompt-anthropic.js";
+import { streamPrompt as streamPromptOpenAI } from "./prompt-openai.js";
+import { streamPrompt as streamPromptTogether } from "./prompt-together.js";
+import { ModelPromptFunction } from "./index.js";
+import { write_todos } from "./tools/write_todos.js";
+import { bash } from "./tools/bash.js";
+import { str_replace_based_edit_tool } from "./tools/str_replace_based_edit_tool.js";
+import { web_search } from "./tools/web_search.js";
+import { web_fetch } from "./tools/web_fetch.js";
 
 export class Session {
   static async *create(
@@ -199,16 +199,8 @@ export class Session {
 
     const context = [completedTodosContext, pendingTodosContext].join("\n\n");
 
-    const basePrompt = `${this.userPrompt}${context ? `\n\n${context}` : ""}
-
-Please evaluate the current pending todos based on what has been completed (including their summaries) and provide an updated list of todos needed to complete the request.
-
-IMPORTANT: 
-- Evaluate the amount of work and break it into properly scoped, sequential todos
-- Each todo should represent a reasonable amount of work - not too granular, not too broad
-- Create sequential dependencies where one todo logically builds on the previous
-- Do not create testing todos - each todo handles its own verification internally
-- Focus on essential work that directly fulfills the request`;
+    // Use just the user prompt for reasoning effort evaluation
+    const basePrompt = this.userPrompt;
 
     // Evaluate reasoning effort using the new evaluatePrompt method
     this.reasoningEffort = await this.evaluatePrompt(basePrompt);
@@ -217,6 +209,9 @@ IMPORTANT:
       workspacePath: this.env.workingDirectory,
       todos: this.todos,
       prompt: basePrompt,
+      todosContext: context, // Pass context separately
+      hasCompletedTodos: completedTodos.length > 0,
+      hasPendingTodos: pendingTodos.length > 0,
     });
 
     const systemPrompt = modelConfig.systemPrompt;

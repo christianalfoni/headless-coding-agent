@@ -25,7 +25,7 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
         },
         insert_line: {
           type: "number",
-          description: "Line number to insert at (for insert command)",
+          description: "Line number to insert at (1-based indexing, like view command). Use 1 to insert at beginning, 2 to insert after line 1, etc.",
         },
         new_str: {
           type: "string",
@@ -41,7 +41,7 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
           minItems: 2,
           maxItems: 2,
           description:
-            "Start and end line numbers for view command [start, end]",
+            "Start and end line numbers for view command [start, end] (1-based indexing, end exclusive). Use [1, 3] to show lines 1 and 2, [2, 5] to show lines 2, 3, and 4.",
         },
       },
       required: ["command", "path"],
@@ -81,7 +81,8 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
 
             if (view_range && view_range.length === 2) {
               const [start, end] = view_range;
-              const viewLines = lines.slice(start - 1, end);
+              // Convert to 0-based indexing, end is exclusive
+              const viewLines = lines.slice(start - 1, end - 1);
               return viewLines.join("\n");
             }
 
@@ -129,14 +130,20 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
               return "Error: insert_line and new_str are required for insert command";
             }
 
+            if (insert_line === 0) {
+              return "Error: insert_line uses 1-based indexing (like view command). Use 1 to insert at beginning, 2 to insert after line 1, etc.";
+            }
+
             const fileContent = await fs.readFile(resolvedFilePath, "utf8");
             const fileLines = fileContent.split("\n");
 
-            if (insert_line < 0 || insert_line > fileLines.length) {
-              return "Error: insert_line is out of range";
+            if (insert_line < 1 || insert_line > fileLines.length + 1) {
+              return `Error: insert_line must be between 1 and ${fileLines.length + 1} (1-based indexing)`;
             }
 
-            fileLines.splice(insert_line, 0, new_str);
+            // Convert from 1-based to 0-based for array operations
+            const insertIndex = insert_line - 1;
+            fileLines.splice(insertIndex, 0, new_str);
             await fs.writeFile(resolvedFilePath, fileLines.join("\n"), "utf8");
             return `Line inserted successfully at line ${insert_line} in '${filePath}'.`;
 

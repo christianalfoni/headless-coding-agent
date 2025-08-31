@@ -1,21 +1,35 @@
-import { Session } from "./Session";
-import { SessionEnvironment } from "./Environment";
-import { Todo } from "./types";
+import { Session } from "./Session.js";
+import { SessionEnvironment } from "./Environment.js";
+import { Todo } from "./types.js";
 
 export interface ModelPromptFunction {
-  evaluateTodos: (params: { workspacePath: string; todos: Todo[]; prompt: string }) => Promise<{
+  evaluateTodos: (params: {
+    workspacePath: string;
+    todos: Todo[];
+    prompt: string;
+    todosContext?: string;
+    hasCompletedTodos?: boolean;
+    hasPendingTodos?: boolean;
+  }) => Promise<{
     model: string;
     systemPrompt: string;
     prompt: string;
     provider: "anthropic" | "openai" | "together";
   }>;
-  executeTodo: (params: { workspacePath: string; todo: Todo; todos: Todo[] }) => Promise<{
+  executeTodo: (params: {
+    workspacePath: string;
+    todo: Todo;
+    todos: Todo[];
+  }) => Promise<{
     model: string;
     systemPrompt: string;
     prompt: string;
     provider: "anthropic" | "openai" | "together";
   }>;
-  summarizeTodos: (params: { workspacePath: string; todos: Todo[] }) => Promise<{
+  summarizeTodos: (params: {
+    workspacePath: string;
+    todos: Todo[];
+  }) => Promise<{
     model: string;
     systemPrompt: string;
     prompt: string;
@@ -41,11 +55,16 @@ export async function* query(options: QueryOptions) {
     undefined,
     options.maxSteps ?? 50
   );
-  
-  return yield* Session.create(options.prompt, context, options.models, options.todos);
+
+  return yield* Session.create(
+    options.prompt,
+    context,
+    options.models,
+    options.todos
+  );
 }
 
 // Re-export all types for SDK usage
-export * from "./types";
-export { Session } from "./Session";
-export { SessionEnvironment } from "./Environment";
+export * from "./types.js";
+export { Session } from "./Session.js";
+export { SessionEnvironment } from "./Environment.js";

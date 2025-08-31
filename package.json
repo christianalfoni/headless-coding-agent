@@ -2,6 +2,7 @@
   "name": "headless-coding-agent",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -19,7 +20,9 @@
   ],
   "scripts": {
     "build": "tsc && chmod +x dist/cli.js",
-    "dev": "npx tsx src/cli.ts"
+    "dev": "npx tsx src/cli.ts",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "devDependencies": {
     "@codesandbox/sdk": "^2.0.7",
@@ -28,7 +31,8 @@
     "boxen": "^8.0.1",
     "inquirer": "^12.9.3",
     "tsx": "^4.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.5",
@@ -43,6 +47,7 @@
     "jsdom": "^26.1.0",
     "lru-cache": "^11.1.0",
     "openai": "^5.13.1",
+    "openai-harmony": "^0.4.0",
     "together-ai": "^0.22.0",
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
