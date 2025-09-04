@@ -16,12 +16,14 @@ export async function* streamPrompt(config: {
   reasoningEffort?: "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
   returnOnToolResult?: string;
+  pathsSet?: Set<string>;
+  apiKey: string;
 }): AsyncGenerator<
   PromptMessage | WriteTodosCallMessage | WriteTodosResultMessage
 > {
   try {
     const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey: config.apiKey,
     });
 
     // Use tools directly in Anthropic format
@@ -173,6 +175,14 @@ export async function* streamPrompt(config: {
             }
 
             const result = await tool.execute(toolUse.input);
+
+            // Track file paths for str_replace_based_edit_tool calls
+            if (toolUse.name === "str_replace_based_edit_tool" && config.pathsSet) {
+              const args = toolUse.input as any;
+              if (args.path) {
+                config.pathsSet.add(args.path);
+              }
+            }
 
             // Yield tool result message
             const toolResultMessage: PromptMessage = {

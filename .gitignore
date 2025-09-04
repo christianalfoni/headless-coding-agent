@@ -6,7 +6,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 test.ts
-agent-template
 test-project
 .DS_Store
 

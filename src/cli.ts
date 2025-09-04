@@ -3,7 +3,9 @@
 import { query, Todo } from "./index.js";
 import { createModels } from "./prompts.js";
 
-function getModelForProvider(provider: "anthropic" | "openai" | "together"): string {
+function getModelForProvider(
+  provider: "anthropic" | "openai" | "together"
+): string {
   switch (provider) {
     case "anthropic":
       return "claude-3-5-sonnet-20241022";
@@ -117,7 +119,7 @@ async function main() {
     const { prompt, format, maxSteps, provider, initialTodos } = parseArgs();
 
     const model = getModelForProvider(provider);
-    const models = createModels(provider, model);
+    const models = createModels(provider, model, "");
 
     const stream = query({
       prompt,

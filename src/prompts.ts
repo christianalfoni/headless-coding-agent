@@ -1,11 +1,21 @@
+import { join } from "path";
 import { ModelPromptFunction } from "./index.js";
 
 export function createModels(
   provider: "anthropic" | "openai" | "together",
-  model: string
+  model: string,
+  apiKey: string
 ): ModelPromptFunction {
   return {
-    evaluateTodos: async ({ workspacePath, todos, prompt, todosContext, hasCompletedTodos, hasPendingTodos }) => {
+    evaluateTodos: async ({
+      workspacePath,
+      todos,
+      prompt,
+      todosContext,
+      hasCompletedTodos,
+      hasPendingTodos,
+      projectAnalysis,
+    }) => {
       // Base system prompt for fresh starts (no existing todos)
       let systemPrompt = `You are an AI assistant that breaks down user requests into properly scoped, sequential todos. You are working in: ${workspacePath}
 
@@ -26,6 +36,11 @@ Focus on quality scope - not too many tiny steps, not too few massive ones. Brea
 
 Use the writeTodos tool to provide the list of pending todos needed to complete the user's request. If no todos are needed (the request is already complete or requires no action), you can respond directly without creating todos.`;
 
+      // Add project analysis context if available
+      if (projectAnalysis) {
+        systemPrompt += `\n\nPROJECT ANALYSIS CONTEXT:\n${projectAnalysis}\n\nUse this project analysis to inform your todo creation. The analysis provides insights about the project structure, existing patterns, and relevant context that should guide your approach.`;
+      }
+
       // Add context-specific instructions only when there are existing todos
       if (hasCompletedTodos || hasPendingTodos) {
         systemPrompt += `\n\nCURRENT TODOS STATE:\n${todosContext}\n\nYour task is to evaluate the current pending todos based on what has been completed and provide an updated list of todos needed to complete the request.\n\nIMPORTANT FOR TODO EVALUATION:\n- Review completed todos and their summaries to understand what work has already been done\n- Evaluate remaining pending todos to see if they still make sense given the completed work\n- Create, modify, or remove todos as needed to efficiently complete the user's request\n- Ensure todos are properly scoped and have logical dependencies\n- Do not create testing todos - each todo handles its own verification internally\n- Focus on essential work that directly fulfills the request`;
@@ -36,10 +51,67 @@ Use the writeTodos tool to provide the list of pending todos needed to complete 
         provider,
         systemPrompt,
         prompt,
+        apiKey,
       };
     },
 
-    executeTodo: async ({ workspacePath, todo, todos }) => {
+    evaluateProject: async ({ workspacePath, prompt, gitRepoInfo }) => {
+      workspacePath = gitRepoInfo?.repo
+        ? join(workspacePath, gitRepoInfo.repo)
+        : workspacePath;
+
+      let systemPrompt = `You are an AI assistant performing project analysis. Your goal is to understand the codebase structure, existing patterns, technologies, and relevant context.
+
+Working directory: ${workspacePath}`;
+
+      // Generate the task prompt with specific instructions
+      let taskPrompt = `I have the following request:
+
+${prompt}
+
+`;
+
+      // Add repository cloning instructions if this is a git repository
+      if (gitRepoInfo?.isGitRepo && gitRepoInfo.fullName) {
+        taskPrompt += `BEFORE analyzing the project, you must:
+1. Clone the repository: git clone https://github.com/${gitRepoInfo.fullName}.git ${gitRepoInfo.repo}
+2. Navigate to the cloned directory: cd ${gitRepoInfo.repo}
+3. Create and checkout a new branch for the user's request: git checkout -b feature/user-request
+4. Then analyze the project structure from within the cloned repository
+
+Use the cloned repository for all analysis commands.
+
+`;
+      }
+
+      taskPrompt += `Your task is to analyze the project structure and identify files/folders relevant to the user's request.
+
+Analyze the project to:
+1. Understand the overall project structure and organization
+2. Identify files, directories, and components that might be relevant to the user's request
+3. Note the technologies, frameworks, and libraries in use
+4. Find configuration files, documentation, and other relevant resources
+5. Understand the current state and structure of the codebase
+
+Use ONLY bash commands to explore the project structure. Do NOT make any changes and do NOT execute the user's request.
+
+IMPORTANT: 
+You should ONLY respond with a list of files and folders relevant for the user request. Example:
+
+- README.md : It describes the calculator app, how to build and test it
+- package.json : Describes a Vite build process
+- index.html : The main entry file`;
+
+      return {
+        model,
+        provider,
+        systemPrompt,
+        prompt: taskPrompt,
+        apiKey,
+      };
+    },
+
+    executeTodo: async ({ workspacePath, todo, todos, projectAnalysis }) => {
       const remainingPendingTodos = todos.filter((t) => t.status === "pending");
       const remainingTodosContext =
         remainingPendingTodos.length > 0
@@ -48,16 +120,48 @@ Use the writeTodos tool to provide the list of pending todos needed to complete 
               .join("\n")}`
           : "";
 
+      // Collect all file paths that have been interacted with across todos
+      const allInteractedPaths = new Set<string>();
+      todos.forEach((t) => {
+        if (t.paths) {
+          t.paths.forEach((path) => allInteractedPaths.add(path));
+        }
+      });
+
+      const interactedPathsContext =
+        allInteractedPaths.size > 0
+          ? `\n\nFiles already interacted with in previous todos:\n${Array.from(
+              allInteractedPaths
+            )
+              .map((path) => `- ${path}`)
+              .join(
+                "\n"
+              )}\n\nUse this context to understand what files have been modified or accessed already.`
+          : "";
+
+      const projectAnalysisSection = projectAnalysis
+        ? `\n\nInitial project analysis:\n${projectAnalysis}\n\nUse this analysis to understand the project structure and patterns when implementing the todo.`
+        : "";
+
       return {
         model,
+        apiKey,
         provider,
         systemPrompt: `You are an AI assistant that executes todos. You have been given a specific todo to accomplish.
 
 Working directory: ${workspacePath}
 
-CRITICAL: You must ONLY do what is described in the todo. Do not go beyond the scope of the todo description. Do not add extra features, improvements, or related work unless explicitly mentioned in the todo itself.${remainingTodosContext}
+CRITICAL: You must ONLY do what is described in the todo. Do not go beyond the scope of the todo description. Do not add extra features, improvements, or related work unless explicitly mentioned in the todo itself.${remainingTodosContext}${interactedPathsContext}${projectAnalysisSection}
 
 IMPORTANT: When the todo is ambiguous, make reasonable assumptions based on context and common practices rather than asking for clarification. Always proceed with implementation using your best judgment. Prefer conservative, minimal actions over comprehensive solutions. Focus strictly on the described task and nothing more.
+
+BASH TOOL USAGE RESTRICTIONS:
+- The bash tool is ONLY for investigation and gathering context - NOT for implementation
+- Use bash commands ONLY to explore the codebase, understand structure, check file contents, or gather information
+- NEVER use bash for implementation actions like creating files, modifying code, installing packages, or making changes
+- For ANY implementation work, you must create and use todos - the bash tool is read-only for investigation purposes
+- Examples of appropriate bash usage: ls, find, grep, cat, head, tail, git log, git status (for context only)
+- Examples of INAPPROPRIATE bash usage: mkdir, touch, npm install, git commit, editing files, running build processes
 
 DEVELOPMENT SERVER RESTRICTIONS:
 - NEVER run development servers or watch commands (npm run dev, yarn dev, npm start, yarn start, pnpm dev, etc.)
@@ -105,6 +209,7 @@ This helps users understand exactly what was done and easily navigate to relevan
       return {
         model,
         provider,
+        apiKey,
         systemPrompt: `You are an AI assistant answering the following user request.
 
 Working directory: ${workspacePath}

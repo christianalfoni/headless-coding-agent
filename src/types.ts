@@ -199,4 +199,5 @@ export interface Todo {
   status: "pending" | "in_progress" | "completed";
   summary?: string;
   reasoningEffort: "high" | "medium" | "low";
+  paths?: string[];
 }

@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { execSync } from "child_process";
 import {
   Todo,
   PromptMessage,
@@ -24,9 +25,21 @@ export class Session {
     userPrompt: string,
     env: SessionEnvironment,
     models: ModelPromptFunction,
-    initialTodos?: Todo[]
+    initialTodos?: Todo[],
+    gitRepoInfo?: {
+      isGitRepo: boolean;
+      org?: string;
+      repo?: string;
+      fullName?: string;
+    }
   ) {
-    const session = new Session(userPrompt, env, models, initialTodos);
+    const session = new Session(
+      userPrompt,
+      env,
+      models,
+      initialTodos,
+      gitRepoInfo
+    );
 
     return yield* session.exec();
   }
@@ -41,12 +54,26 @@ export class Session {
   public readonly startTime: Date;
   public models: ModelPromptFunction;
   public reasoningEffort: "high" | "medium" | "low";
+  public lastEvaluateMessage: string | null;
+  public projectAnalysis: string | null;
+  public gitRepoInfo: {
+    isGitRepo: boolean;
+    org?: string;
+    repo?: string;
+    fullName?: string;
+  };
 
   constructor(
     userPrompt: string,
     env: SessionEnvironment,
     models: ModelPromptFunction,
-    initialTodos?: Todo[]
+    initialTodos?: Todo[],
+    gitRepoInfo?: {
+      isGitRepo: boolean;
+      org?: string;
+      repo?: string;
+      fullName?: string;
+    }
   ) {
     this.sessionId = uuidv4();
     this.userPrompt = userPrompt;
@@ -59,6 +86,45 @@ export class Session {
     this.startTime = new Date();
     this.models = models;
     this.reasoningEffort = "medium"; // default value
+    this.lastEvaluateMessage = null;
+    this.projectAnalysis = null;
+    this.gitRepoInfo = gitRepoInfo || this.detectGitRepo();
+  }
+
+  private detectGitRepo(): {
+    isGitRepo: boolean;
+    org?: string;
+    repo?: string;
+    fullName?: string;
+  } {
+    try {
+      const cwd = this.env.workingDirectory;
+      // Check if we're in a git repository
+      execSync("git rev-parse --is-inside-work-tree", { cwd, stdio: "pipe" });
+
+      // Get the remote origin URL
+      const remoteUrl = execSync("git config --get remote.origin.url", {
+        cwd,
+        encoding: "utf8",
+      }).trim();
+
+      // Parse GitHub org/repo from URL
+      const match = remoteUrl.match(
+        /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/
+      );
+      if (match) {
+        return {
+          isGitRepo: true,
+          org: match[1],
+          repo: match[2],
+          fullName: `${match[1]}/${match[2]}`,
+        };
+      }
+
+      return { isGitRepo: true };
+    } catch (error) {
+      return { isGitRepo: false };
+    }
   }
 
   step(inputTokens: number, outputTokens: number, costCents: number): void {
@@ -126,7 +192,31 @@ export class Session {
   }
 
   async *exec(): AsyncGenerator<Message> {
-    yield* this.evaluateTodos();
+    // Evaluate reasoning effort first
+    this.reasoningEffort = await this.evaluatePrompt(this.userPrompt);
+
+    // Always evaluate project after determining complexity
+    this.projectAnalysis = yield* this.evaluateProject(this.userPrompt);
+
+    // For low complexity, create a simple todo directly from user prompt with project analysis
+    if (this.reasoningEffort === "low") {
+      const todoDescription = this.projectAnalysis
+        ? `${this.userPrompt}\n\nProject Analysis Context:\n${this.projectAnalysis}`
+        : this.userPrompt;
+
+      this.todos = [
+        {
+          description: todoDescription,
+          context: "",
+          status: "pending" as const,
+          reasoningEffort: "low",
+          paths: [],
+        },
+      ];
+    } else {
+      // For medium/high complexity, use the full evaluation process
+      yield* this.evaluateTodos();
+    }
 
     while (this.todos.some((todo) => todo.status === "pending")) {
       // Find the first pending todo
@@ -136,11 +226,13 @@ export class Session {
       // Mark todo as in_progress
       pendingTodo.status = "in_progress";
 
-      yield {
-        type: "todos" as const,
-        todos: structuredClone(this.todos),
-        reasoningEffort: this.reasoningEffort,
-      };
+      if (this.todos.length > 1) {
+        yield {
+          type: "todos" as const,
+          todos: structuredClone(this.todos),
+          reasoningEffort: this.reasoningEffort,
+        };
+      }
 
       // Execute the todo as a prompt in the child session
       const text = yield* this.executeTodo(pendingTodo);
@@ -148,11 +240,14 @@ export class Session {
       // Mark todo as completed
       pendingTodo.status = "completed";
       pendingTodo.summary = text;
-      yield {
-        type: "todos" as const,
-        todos: structuredClone(this.todos),
-        reasoningEffort: this.reasoningEffort,
-      };
+
+      if (this.todos.length > 1) {
+        yield {
+          type: "todos" as const,
+          todos: structuredClone(this.todos),
+          reasoningEffort: this.reasoningEffort,
+        };
+      }
     }
 
     // Only summarize if we have multiple todos
@@ -202,9 +297,6 @@ export class Session {
     // Use just the user prompt for reasoning effort evaluation
     const basePrompt = this.userPrompt;
 
-    // Evaluate reasoning effort using the new evaluatePrompt method
-    this.reasoningEffort = await this.evaluatePrompt(basePrompt);
-
     const modelConfig = await this.models.evaluateTodos({
       workspacePath: this.env.workingDirectory,
       todos: this.todos,
@@ -212,6 +304,7 @@ export class Session {
       todosContext: context, // Pass context separately
       hasCompletedTodos: completedTodos.length > 0,
       hasPendingTodos: pendingTodos.length > 0,
+      projectAnalysis: this.projectAnalysis || undefined,
     });
 
     const systemPrompt = modelConfig.systemPrompt;
@@ -226,18 +319,19 @@ export class Session {
       prompt,
       tools: {
         write_todos: write_todos(),
-        bash: bash(this.env.workingDirectory),
       },
       planningMode: true,
       reasoningEffort: this.reasoningEffort,
       verbosity: "low",
       returnOnToolResult: "write_todos",
+      apiKey: modelConfig.apiKey,
     });
 
     let todosWritten: Array<{
       description: string;
       reasoningEffort: "high" | "medium" | "low";
     }> = [];
+    let lastMessage: string | null = null;
 
     for await (const part of stream) {
       if (part.type === "tool-call" && part.toolName === "write_todos") {
@@ -267,19 +361,34 @@ export class Session {
           todos: structuredClone(this.todos),
           reasoningEffort: this.reasoningEffort,
         };
+        // Store the last message for context
+        this.lastEvaluateMessage = lastMessage;
         // Stream will return after this due to returnOnToolResult: true
         break;
       } else {
+        // Capture the last text or reasoning message
+        if (part.type === "text") {
+          lastMessage = part.text;
+        } else if (part.type === "reasoning") {
+          lastMessage = part.text;
+        }
         yield part;
       }
     }
   }
 
   async *executeTodo(todo: Todo) {
+    // Initialize or use existing paths set for this todo
+    if (!todo.paths) {
+      todo.paths = [];
+    }
+    const pathsSet = new Set(todo.paths);
+
     const modelConfig = await this.models.executeTodo({
       workspacePath: this.env.workingDirectory,
       todo,
       todos: this.todos,
+      projectAnalysis: this.projectAnalysis || undefined,
     });
 
     const systemPrompt = modelConfig.systemPrompt;
@@ -292,7 +401,7 @@ export class Session {
     const bashTool = bash(this.env.workingDirectory);
 
     try {
-      return yield* streamPromptFn({
+      const result = yield* streamPromptFn({
         session: this,
         system: systemPrompt,
         prompt,
@@ -307,7 +416,14 @@ export class Session {
         maxSteps: this.getMaxSteps(),
         reasoningEffort: todo.reasoningEffort,
         verbosity: "low",
+        pathsSet,
+        apiKey: modelConfig.apiKey,
       }) as AsyncGenerator<PromptMessage, string>;
+
+      // Update the todo's paths with any new paths that were added
+      todo.paths = Array.from(pathsSet);
+
+      return result;
     } finally {
       // Always dispose of the bash tool when done
       bashTool.dispose();
@@ -335,6 +451,7 @@ export class Session {
       },
       maxSteps: this.getMaxSteps(),
       verbosity: "medium",
+      apiKey: modelConfig.apiKey,
     }) as AsyncGenerator<TextMessage | ReasoningMessage, string>;
   }
 
@@ -365,6 +482,7 @@ Respond with only one word: "low", "medium", or "high". Do not include any addit
       prompt,
       tools: {},
       verbosity: "low",
+      apiKey: modelConfig.apiKey,
     });
 
     for await (const part of stream) {
@@ -384,5 +502,55 @@ Respond with only one word: "low", "medium", or "high". Do not include any addit
     }
 
     return "medium";
+  }
+
+  async *evaluateProject(
+    prompt: string
+  ): AsyncGenerator<PromptMessage, string> {
+    const modelConfig = await this.models.evaluateProject({
+      workspacePath: this.env.workingDirectory,
+      prompt,
+      gitRepoInfo: this.gitRepoInfo,
+    });
+
+    const systemPrompt = modelConfig.systemPrompt;
+    const promptText = modelConfig.prompt;
+    const streamPromptFn = this.getStreamPromptForProvider(
+      modelConfig.provider
+    );
+
+    const stream = streamPromptFn({
+      session: this,
+      system: systemPrompt,
+      prompt: promptText,
+      tools: {
+        bash: bash(this.env.workingDirectory),
+      },
+      verbosity: "low",
+      apiKey: modelConfig.apiKey,
+    });
+
+    let result = "";
+    for await (const part of stream) {
+      if (part.type === "text") {
+        result += part.text;
+      }
+      // Exclude reasoning from the result to prevent leakage of analysis suggestions
+      // Only capture the main text output which should contain pure project analysis
+
+      // Only yield messages that are part of PromptMessage type
+      if (
+        part.type === "text" ||
+        part.type === "reasoning" ||
+        part.type === "error" ||
+        (part.type === "tool-call" && part.toolName === "bash") ||
+        (part.type === "tool-result" && part.toolName === "bash") ||
+        (part.type === "tool-error" && part.toolName === "bash")
+      ) {
+        yield part as PromptMessage;
+      }
+    }
+
+    return result;
   }
 }

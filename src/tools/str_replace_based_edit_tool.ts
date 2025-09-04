@@ -82,7 +82,7 @@ export function str_replace_based_edit_tool(workingDirectory: string) {
             if (view_range && view_range.length === 2) {
               const [start, end] = view_range;
               // Convert to 0-based indexing, end is exclusive
-              const viewLines = lines.slice(start - 1, end - 1);
+              const viewLines = lines.slice(start - 1, end);
               return viewLines.join("\n");
             }
 

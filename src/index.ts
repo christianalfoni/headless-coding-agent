@@ -10,21 +10,36 @@ export interface ModelPromptFunction {
     todosContext?: string;
     hasCompletedTodos?: boolean;
     hasPendingTodos?: boolean;
+    projectAnalysis?: string;
   }) => Promise<{
     model: string;
     systemPrompt: string;
     prompt: string;
     provider: "anthropic" | "openai" | "together";
+    apiKey: string;
+  }>;
+  evaluateProject: (params: {
+    workspacePath: string;
+    prompt: string;
+    gitRepoInfo?: { isGitRepo: boolean; org?: string; repo?: string; fullName?: string };
+  }) => Promise<{
+    model: string;
+    systemPrompt: string;
+    prompt: string;
+    provider: "anthropic" | "openai" | "together";
+    apiKey: string;
   }>;
   executeTodo: (params: {
     workspacePath: string;
     todo: Todo;
     todos: Todo[];
+    projectAnalysis?: string;
   }) => Promise<{
     model: string;
     systemPrompt: string;
     prompt: string;
     provider: "anthropic" | "openai" | "together";
+    apiKey: string;
   }>;
   summarizeTodos: (params: {
     workspacePath: string;
@@ -34,6 +49,7 @@ export interface ModelPromptFunction {
     systemPrompt: string;
     prompt: string;
     provider: "anthropic" | "openai" | "together";
+    apiKey: string;
   }>;
 }
 
@@ -47,6 +63,7 @@ export interface QueryOptions {
   maxSteps?: number;
   todos?: Todo[];
   models: ModelPromptFunction;
+  gitRepoInfo?: { isGitRepo: boolean; org?: string; repo?: string; fullName?: string };
 }
 
 export async function* query(options: QueryOptions) {
@@ -60,7 +77,8 @@ export async function* query(options: QueryOptions) {
     options.prompt,
     context,
     options.models,
-    options.todos
+    options.todos,
+    options.gitRepoInfo
   );
 }
 

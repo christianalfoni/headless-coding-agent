@@ -16,12 +16,14 @@ export async function* streamPrompt(config: {
   reasoningEffort?: "low" | "medium" | "high";
   verbosity?: "low" | "medium" | "high";
   returnOnToolResult?: string;
+  pathsSet?: Set<string>;
+  apiKey: string;
 }): AsyncGenerator<
   PromptMessage | WriteTodosCallMessage | WriteTodosResultMessage
 > {
   try {
     const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: config.apiKey,
     });
 
     // Convert tools from Anthropic format to Responses API format
@@ -178,6 +180,14 @@ export async function* streamPrompt(config: {
             }
 
             const result = await tool.execute(parsedArgs);
+
+            // Track file paths for str_replace_based_edit_tool calls
+            if (name === "str_replace_based_edit_tool" && config.pathsSet) {
+              const args = parsedArgs as any;
+              if (args.path) {
+                config.pathsSet.add(args.path);
+              }
+            }
 
             // Yield tool result message
             const toolResultMessage: PromptMessage = {

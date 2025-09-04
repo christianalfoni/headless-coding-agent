@@ -1,9 +1,8 @@
 import fs from "fs";
-import Together from "together-ai";
-import { load_harmony_encoding, Message, Content } from "openai-harmony";
+import { load_harmony_encoding, Message, Role } from "openai-harmony";
 
 // Delete agent.log file when module loads
-const logPath = "agent.log";
+const logPath = "../agent.log";
 console.log(
   `Together Harmony SDK: agent.log path will be: ${process.cwd()}/${logPath}`
 );
@@ -39,10 +38,6 @@ interface Tool {
   description?: string;
   input_schema: JsonSchema;
 }
-
-const client = new Together({
-  apiKey: process.env.TOGETHER_AI_API_KEY,
-});
 
 export function convertJsonSchemaToHarmonyTypeScript(tools: Tool[]): string {
   if (tools.length === 0) {
@@ -138,11 +133,32 @@ export function convertJsonSchemaToHarmonyTypeScript(tools: Tool[]): string {
   return `namespace functions {\n${functions}\n}`;
 }
 
+// Raw message format from parseMessagesFromCompletionTokens
+interface RawParsedMessage {
+  role: string;
+  content: string;
+  channel?: string;
+  recipient?: string;
+  name?: string;
+}
+
+// Convert raw parsed messages to proper Message format
+function convertRawMessagesToMessages(rawMessages: RawParsedMessage[]): Message[] {
+  return rawMessages.map(raw => ({
+    role: raw.role as Role,
+    content: [{ type: "text" as const, text: raw.content }],
+    channel: raw.channel,
+    recipient: raw.recipient,
+    name: raw.name
+  }));
+}
+
 export async function prompt(config: {
   messages: Message[];
   tools?: Tool[];
   reasoningEffort?: "low" | "medium" | "high";
-}): Promise<{ content: Content[]; inputTokens: number; outputTokens: number }> {
+  apiKey: string;
+}): Promise<{ messages: Message[]; inputTokens: number; outputTokens: number }> {
   try {
     // Log function entry
     fs.appendFileSync(
@@ -159,7 +175,15 @@ export async function prompt(config: {
     // 2. Use input messages directly since they're already in harmony format
     const harmonyMessages: Message[] = config.messages;
 
-    // 3. Add tools if provided
+    // 3. Add reasoning effort to system message if provided
+    if (config.reasoningEffort) {
+      const systemMessage = harmonyMessages.find((m) => m.role === "system");
+      if (systemMessage && systemMessage.content[0]?.type === "text") {
+        systemMessage.content[0].text += `\n<|reasoning|>${config.reasoningEffort.toUpperCase()}`;
+      }
+    }
+
+    // 4. Add tools if provided
     if (config.tools && config.tools.length > 0) {
       const toolsMessage: Message = {
         role: "developer",
@@ -175,14 +199,14 @@ export async function prompt(config: {
       harmonyMessages.unshift(toolsMessage);
     }
 
-    // 4. Render conversation to tokens
+    // 5. Render conversation to tokens
     const inputTokensArray = encoding.renderConversationForCompletion(
       { messages: harmonyMessages },
       "assistant",
       { auto_drop_analysis: false }
     );
 
-    // 5. Convert tokens to string for the API
+    // 6. Convert tokens to string for the API
     const promptText = encoding.decodeUtf8(inputTokensArray);
 
     // Log the actual tokens to agent.log
@@ -195,30 +219,39 @@ export async function prompt(config: {
       // Ignore file write errors
     }
 
-    // 6. Send to Together AI via SDK
-    const completionParams: any = {
-      messages: [{ role: "user", content: promptText }],
-      model: "openai/gpt-oss-120b",
-    };
-
-    // Add reasoning effort if provided (convert to uppercase for harmony format)
-    if (config.reasoningEffort) {
-      completionParams.reasoning_effort = config.reasoningEffort.toUpperCase();
-    }
-
     // Log the API call
     fs.appendFileSync(
       logPath,
       `=== API CALL ===\nParams: ${JSON.stringify(
-        completionParams,
+        promptText,
         null,
         2
       )}\n================\n\n`
     );
 
-    const { data: completion } = await client.chat.completions
-      .create(completionParams)
-      .withResponse();
+    const response = await fetch(
+      "https://api.fireworks.ai/inference/v1/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "accounts/fireworks/models/gpt-oss-120b",
+          prompt: promptText,
+          max_tokens: 2048,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Fireworks API request failed: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const completion = await response.json();
 
     // Log the API response
     fs.appendFileSync(
@@ -230,8 +263,8 @@ export async function prompt(config: {
       )}\n====================\n\n`
     );
 
-    // 7. Extract completion content and usage from response
-    const completionContent = completion.choices[0]?.message?.content;
+    // 8. Extract completion content and usage from response
+    const completionContent = completion.choices[0].text;
     const inputTokens = completion.usage?.prompt_tokens || 0;
     const outputTokens = completion.usage?.completion_tokens || 0;
 
@@ -239,57 +272,95 @@ export async function prompt(config: {
       throw new Error("No completion content received from Together AI");
     }
 
-    // 8. Encode the response back to tokens for parsing
-    const responseTokens = encoding.encode(completionContent, new Set());
+    // 9. Parse harmony response using openai-harmony  
+    let parsedMessages: Message[];
 
-    // 9. Parse harmony response back to structured format
-    const parsedResult =
-      encoding.parseMessagesFromCompletionTokens(responseTokens);
+    // Build the full conversation by concatenating prompt + completion
+    // Fix incomplete harmony responses by ensuring they end with <|end|>
+    let fixedCompletionContent = completionContent;
+    if (!completionContent.trim().endsWith("<|end|>")) {
+      fixedCompletionContent = completionContent + "<|end|>";
+    }
+    const fullConversation = promptText + fixedCompletionContent;
 
-    // 10. Parse the JSON result to get messages
-    const parsedMessages = JSON.parse(parsedResult) as Message[];
+    // Remove the full conversation logging - too verbose
 
-    // 11. Return the content array from assistant messages, handling preemptive channel
+    try {
+      // Use the original input tokens + encode just the completion
+      const completionTokens = encoding.encode(
+        fixedCompletionContent,
+        new Set(["<|start|>", "<|end|>", "<|message|>", "<|channel|>"])
+      );
+
+      // Combine original input tokens with completion tokens
+      const fullTokens = new Uint32Array(
+        inputTokensArray.length + completionTokens.length
+      );
+      fullTokens.set(inputTokensArray, 0);
+      fullTokens.set(completionTokens, inputTokensArray.length);
+
+      // Log token info for debugging
+      fs.appendFileSync(
+        logPath,
+        `=== TOKEN INFO ===\nInput tokens: ${
+          inputTokensArray.length
+        }, Completion tokens: ${completionTokens.length}, Total: ${
+          fullTokens.length
+        }\nFirst few input tokens: ${Array.from(
+          inputTokensArray.slice(0, 5)
+        )}\nFirst few completion tokens: ${Array.from(
+          completionTokens.slice(0, 5)
+        )}\n==================\n\n`
+      );
+
+      // Parse the complete conversation tokens as messages
+      const parsedResult =
+        encoding.parseMessagesFromCompletionTokens(fullTokens);
+      
+      // Log the raw parsed result before JSON parsing
+      fs.appendFileSync(
+        logPath,
+        `=== RAW PARSED RESULT ===\n${parsedResult}\n=========================\n\n`
+      );
+      
+      const rawParsedMessages = JSON.parse(parsedResult) as RawParsedMessage[];
+      parsedMessages = convertRawMessagesToMessages(rawParsedMessages);
+    } catch (error) {
+      fs.appendFileSync(
+        logPath,
+        `=== PARSING ERROR ===\n${error}\n======================\n\n`
+      );
+      throw error;
+    }
+
+    // 11. Return the NEW assistant messages (response only)
     if (parsedMessages.length === 0) {
-      return { content: [], inputTokens, outputTokens };
+      return { messages: [], inputTokens, outputTokens };
     }
 
-    const allContent: Content[] = [];
+    // Get the actual count of input messages that went into rendering
+    // This should match the length of harmonyMessages after all modifications
+    const originalMessageCount = harmonyMessages.length;
 
-    // Process all assistant messages
-    for (const message of parsedMessages) {
-      if (message.role === "assistant") {
-        // Check if this is a preemptive channel message
-        const isPreemptive = message.content.some(
-          (content) =>
-            content.type === "text" &&
-            content.text.includes("<|channel|>preemptive<|message|>")
-        );
+    // Process only the NEW assistant messages from the response
+    const newMessages = parsedMessages.slice(originalMessageCount);
 
-        if (isPreemptive) {
-          // Convert preemptive messages to plain text content
-          for (const content of message.content) {
-            if (content.type === "text") {
-              // Extract the actual message content after the preemptive tag
-              const preemptiveMatch = content.text.match(
-                /<\|channel\|>preemptive<\|message\|>\s*(.*?)(?:<\|end\|>|$)/s
-              );
-              if (preemptiveMatch && preemptiveMatch[1]) {
-                allContent.push({
-                  type: "text",
-                  text: preemptiveMatch[1].trim(),
-                });
-              }
-            }
-          }
-        } else {
-          // Add regular assistant message content
-          allContent.push(...message.content);
-        }
-      }
-    }
+    // Debug: Log the new messages structure
+    fs.appendFileSync(
+      logPath,
+      `=== NEW MESSAGES DEBUG ===\nOriginal message count: ${originalMessageCount}\nTotal parsed messages: ${parsedMessages.length}\nNew messages: ${JSON.stringify(newMessages, null, 2)}\n==========================\n\n`
+    );
 
-    return { content: allContent, inputTokens, outputTokens };
+    // Return all new messages (no role filtering needed)
+    const result = { messages: newMessages, inputTokens, outputTokens };
+    
+    // Log the final result we're returning
+    fs.appendFileSync(
+      logPath,
+      `=== FINAL RESULT ===\n${JSON.stringify(result, null, 2)}\n====================\n\n`
+    );
+    
+    return result;
   } catch (error) {
     console.error("Error in together-harmony SDK:", error);
     throw error;
