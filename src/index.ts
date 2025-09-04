@@ -21,7 +21,7 @@ export interface ModelPromptFunction {
   evaluateProject: (params: {
     workspacePath: string;
     prompt: string;
-    gitRepoInfo?: { isGitRepo: boolean; org?: string; repo?: string; fullName?: string };
+    repos?: GitRepoInfo[];
   }) => Promise<{
     model: string;
     systemPrompt: string;
@@ -34,6 +34,7 @@ export interface ModelPromptFunction {
     todo: Todo;
     todos: Todo[];
     projectAnalysis?: string;
+    repos?: GitRepoInfo[];
   }) => Promise<{
     model: string;
     systemPrompt: string;
@@ -53,6 +54,16 @@ export interface ModelPromptFunction {
   }>;
 }
 
+export interface GitRepoInfo {
+  isGitRepo: boolean;
+  folderName: string;
+  remoteUrl: string;
+  org?: string;
+  repo?: string;
+  fullName?: string;
+  branchName?: string;
+}
+
 export interface QueryOptions {
   prompt: string;
   workingDirectory: string;
@@ -63,7 +74,7 @@ export interface QueryOptions {
   maxSteps?: number;
   todos?: Todo[];
   models: ModelPromptFunction;
-  gitRepoInfo?: { isGitRepo: boolean; org?: string; repo?: string; fullName?: string };
+  repos?: GitRepoInfo[];
 }
 
 export async function* query(options: QueryOptions) {
@@ -78,7 +89,7 @@ export async function* query(options: QueryOptions) {
     context,
     options.models,
     options.todos,
-    options.gitRepoInfo
+    options.repos
   );
 }
 

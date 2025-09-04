@@ -2,6 +2,7 @@ import express from "express";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { execSync } from "child_process";
 
 const app = express();
 const PORT = 4999;
@@ -82,6 +83,65 @@ async function setupGitCredentials(githubToken) {
   console.log("Git credentials setup completed");
 }
 
+async function cloneRepositories(reposWithBranches, workingDirectory) {
+  if (!reposWithBranches || reposWithBranches.length === 0) {
+    console.log("No repositories to clone");
+    return [];
+  }
+
+  console.log(`Cloning ${reposWithBranches.length} repositories to ${workingDirectory}`);
+  
+  const clonedRepos = [];
+  
+  for (const repoWithBranch of reposWithBranches) {
+    const { repoInfo, branchName } = repoWithBranch;
+    
+    try {
+      const targetDir = path.join(workingDirectory, repoInfo.folderName);
+      
+      console.log(`Cloning ${repoInfo.remoteUrl} into ${repoInfo.folderName} with branch ${branchName}`);
+      
+      // Clone the repository (since we're in a clean workspace, no need to check if directory exists)
+      execSync(`git clone ${repoInfo.remoteUrl} ${repoInfo.folderName}`, {
+        cwd: workingDirectory,
+        stdio: "pipe"
+      });
+      
+      // Create and checkout the pre-generated branch
+      execSync(`git checkout -b ${branchName}`, {
+        cwd: targetDir,
+        stdio: "pipe"
+      });
+      
+      // Push the new branch to remote to establish upstream tracking
+      execSync(`git push -u origin ${branchName}`, {
+        cwd: targetDir,
+        stdio: "pipe"
+      });
+      
+      console.log(`Successfully cloned ${repoInfo.folderName}, created branch ${branchName}, and pushed to remote`);
+      
+      clonedRepos.push({
+        ...repoInfo,
+        branchName: branchName,
+        cloned: true
+      });
+      
+    } catch (error) {
+      console.error(`Failed to process ${repoInfo.folderName}: ${error.message}`);
+      // Add repo to list even if failed, but mark as failed
+      clonedRepos.push({
+        ...repoInfo,
+        branchName: branchName,
+        cloned: false,
+        error: error.message
+      });
+    }
+  }
+  
+  return clonedRepos;
+}
+
 // Endpoint to start a new query
 app.post("/query", async (req, res) => {
   try {
@@ -93,10 +153,10 @@ app.post("/query", async (req, res) => {
       maxSteps = 50,
       workingDirectory = process.cwd(),
       githubToken,
-      gitRepoInfo,
+      reposWithBranches,
     } = req.body;
     console.log("Extracted provider:", typeof provider, provider);
-    console.log("Git repo info:", JSON.stringify(gitRepoInfo, null, 2));
+    console.log("Repos with branches:", JSON.stringify(reposWithBranches, null, 2));
 
     if (!prompt) {
       return res.status(400).json({ error: "Prompt is required" });
@@ -121,6 +181,12 @@ app.post("/query", async (req, res) => {
       await setupGitCredentials(githubToken);
     }
 
+    // Clone repositories if provided
+    let clonedRepos = [];
+    if (reposWithBranches && reposWithBranches.length > 0) {
+      clonedRepos = await cloneRepositories(reposWithBranches, workingDirectory);
+    }
+
     // Create new session
     currentSession = {
       messages,
@@ -128,6 +194,7 @@ app.post("/query", async (req, res) => {
       startTime: new Date(),
       prompt,
       provider,
+      clonedRepos,
     };
 
     // Start the query in background
@@ -144,12 +211,23 @@ app.post("/query", async (req, res) => {
         const models = createModels(provider, model, apiKey);
         console.log("Created models:", typeof models, models);
 
+        // Pass all cloned repos to the core agent for project analysis
+        const repos = clonedRepos.filter(repo => repo.cloned).map(repo => ({
+          isGitRepo: true,
+          folderName: repo.folderName,
+          remoteUrl: repo.remoteUrl,
+          org: repo.org,
+          repo: repo.repo,
+          fullName: repo.fullName,
+          branchName: repo.branchName
+        }));
+
         const queryOptions = {
           prompt,
           workingDirectory,
           maxSteps,
           models,
-          gitRepoInfo,
+          repos: repos
         };
 
         const queryGenerator = query(queryOptions);
@@ -214,6 +292,7 @@ app.get("/messages", (req, res) => {
     error: currentSession.error,
     messages,
     totalMessages: currentSession.messages.length,
+    clonedRepositories: currentSession.clonedRepos || [],
   });
 });
 
@@ -238,7 +317,7 @@ app.get("/session", (_, res) => {
 });
 
 // Endpoint to clear the current session
-app.delete("/session", (req, res) => {
+app.delete("/session", (_, res) => {
   if (currentSession) {
     currentSession = null;
     res.json({ message: "Session cleared successfully" });

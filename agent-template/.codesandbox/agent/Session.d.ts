@@ -2,12 +2,15 @@ import { Todo, PromptMessage, TodosMessage, Message, TextMessage, ReasoningMessa
 import { SessionEnvironment } from "./Environment.js";
 import { ModelPromptFunction } from "./index.js";
 export declare class Session {
-    static create(userPrompt: string, env: SessionEnvironment, models: ModelPromptFunction, initialTodos?: Todo[], gitRepoInfo?: {
+    static create(userPrompt: string, env: SessionEnvironment, models: ModelPromptFunction, initialTodos?: Todo[], repos?: Array<{
         isGitRepo: boolean;
+        folderName: string;
+        remoteUrl: string;
         org?: string;
         repo?: string;
         fullName?: string;
-    }): AsyncGenerator<Message, any, any>;
+        branchName?: string;
+    }>): AsyncGenerator<Message, any, any>;
     readonly sessionId: string;
     todos: Todo[];
     env: SessionEnvironment;
@@ -21,19 +24,24 @@ export declare class Session {
     reasoningEffort: "high" | "medium" | "low";
     lastEvaluateMessage: string | null;
     projectAnalysis: string | null;
-    gitRepoInfo: {
+    repos: Array<{
         isGitRepo: boolean;
+        folderName: string;
+        remoteUrl: string;
         org?: string;
         repo?: string;
         fullName?: string;
-    };
-    constructor(userPrompt: string, env: SessionEnvironment, models: ModelPromptFunction, initialTodos?: Todo[], gitRepoInfo?: {
+        branchName?: string;
+    }>;
+    constructor(userPrompt: string, env: SessionEnvironment, models: ModelPromptFunction, initialTodos?: Todo[], repos?: Array<{
         isGitRepo: boolean;
+        folderName: string;
+        remoteUrl: string;
         org?: string;
         repo?: string;
         fullName?: string;
-    });
-    private detectGitRepo;
+        branchName?: string;
+    }>);
     step(inputTokens: number, outputTokens: number, costCents: number): void;
     getMaxSteps(): number | undefined;
     private generateTodoContext;

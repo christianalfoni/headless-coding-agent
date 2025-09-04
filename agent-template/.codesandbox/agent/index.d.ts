@@ -18,12 +18,7 @@ export interface ModelPromptFunction {
     evaluateProject: (params: {
         workspacePath: string;
         prompt: string;
-        gitRepoInfo?: {
-            isGitRepo: boolean;
-            org?: string;
-            repo?: string;
-            fullName?: string;
-        };
+        repos?: GitRepoInfo[];
     }) => Promise<{
         model: string;
         systemPrompt: string;
@@ -36,6 +31,7 @@ export interface ModelPromptFunction {
         todo: Todo;
         todos: Todo[];
         projectAnalysis?: string;
+        repos?: GitRepoInfo[];
     }) => Promise<{
         model: string;
         systemPrompt: string;
@@ -54,6 +50,15 @@ export interface ModelPromptFunction {
         apiKey: string;
     }>;
 }
+export interface GitRepoInfo {
+    isGitRepo: boolean;
+    folderName: string;
+    remoteUrl: string;
+    org?: string;
+    repo?: string;
+    fullName?: string;
+    branchName?: string;
+}
 export interface QueryOptions {
     prompt: string;
     workingDirectory: string;
@@ -64,12 +69,7 @@ export interface QueryOptions {
     maxSteps?: number;
     todos?: Todo[];
     models: ModelPromptFunction;
-    gitRepoInfo?: {
-        isGitRepo: boolean;
-        org?: string;
-        repo?: string;
-        fullName?: string;
-    };
+    repos?: GitRepoInfo[];
 }
 export declare function query(options: QueryOptions): AsyncGenerator<import("./types.js").Message, any, any>;
 export * from "./types.js";

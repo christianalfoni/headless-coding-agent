@@ -6,7 +6,7 @@
   "tasks": {
     "agent": {
       "name": "agent-server",
-      "command": "rm -f README.md && bun .codesandbox/agent.js",
+      "command": "rm -rf .git && rm -f README.md && bun .codesandbox/agent.js",
       "preview": {
         "port": 4999
       },

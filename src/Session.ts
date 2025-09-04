@@ -26,19 +26,22 @@ export class Session {
     env: SessionEnvironment,
     models: ModelPromptFunction,
     initialTodos?: Todo[],
-    gitRepoInfo?: {
+    repos?: Array<{
       isGitRepo: boolean;
+      folderName: string;
+      remoteUrl: string;
       org?: string;
       repo?: string;
       fullName?: string;
-    }
+      branchName?: string;
+    }>
   ) {
     const session = new Session(
       userPrompt,
       env,
       models,
       initialTodos,
-      gitRepoInfo
+      repos
     );
 
     return yield* session.exec();
@@ -56,24 +59,30 @@ export class Session {
   public reasoningEffort: "high" | "medium" | "low";
   public lastEvaluateMessage: string | null;
   public projectAnalysis: string | null;
-  public gitRepoInfo: {
+  public repos: Array<{
     isGitRepo: boolean;
+    folderName: string;
+    remoteUrl: string;
     org?: string;
     repo?: string;
     fullName?: string;
-  };
+    branchName?: string;
+  }>;
 
   constructor(
     userPrompt: string,
     env: SessionEnvironment,
     models: ModelPromptFunction,
     initialTodos?: Todo[],
-    gitRepoInfo?: {
+    repos?: Array<{
       isGitRepo: boolean;
+      folderName: string;
+      remoteUrl: string;
       org?: string;
       repo?: string;
       fullName?: string;
-    }
+      branchName?: string;
+    }>
   ) {
     this.sessionId = uuidv4();
     this.userPrompt = userPrompt;
@@ -88,44 +97,9 @@ export class Session {
     this.reasoningEffort = "medium"; // default value
     this.lastEvaluateMessage = null;
     this.projectAnalysis = null;
-    this.gitRepoInfo = gitRepoInfo || this.detectGitRepo();
+    this.repos = repos || [];
   }
 
-  private detectGitRepo(): {
-    isGitRepo: boolean;
-    org?: string;
-    repo?: string;
-    fullName?: string;
-  } {
-    try {
-      const cwd = this.env.workingDirectory;
-      // Check if we're in a git repository
-      execSync("git rev-parse --is-inside-work-tree", { cwd, stdio: "pipe" });
-
-      // Get the remote origin URL
-      const remoteUrl = execSync("git config --get remote.origin.url", {
-        cwd,
-        encoding: "utf8",
-      }).trim();
-
-      // Parse GitHub org/repo from URL
-      const match = remoteUrl.match(
-        /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/
-      );
-      if (match) {
-        return {
-          isGitRepo: true,
-          org: match[1],
-          repo: match[2],
-          fullName: `${match[1]}/${match[2]}`,
-        };
-      }
-
-      return { isGitRepo: true };
-    } catch (error) {
-      return { isGitRepo: false };
-    }
-  }
 
   step(inputTokens: number, outputTokens: number, costCents: number): void {
     this.stepCount++;
@@ -389,6 +363,7 @@ export class Session {
       todo,
       todos: this.todos,
       projectAnalysis: this.projectAnalysis || undefined,
+      repos: this.repos,
     });
 
     const systemPrompt = modelConfig.systemPrompt;
@@ -510,7 +485,7 @@ Respond with only one word: "low", "medium", or "high". Do not include any addit
     const modelConfig = await this.models.evaluateProject({
       workspacePath: this.env.workingDirectory,
       prompt,
-      gitRepoInfo: this.gitRepoInfo,
+      repos: this.repos,
     });
 
     const systemPrompt = modelConfig.systemPrompt;

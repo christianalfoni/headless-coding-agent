@@ -1,5 +1,5 @@
 import { join } from "path";
-import { ModelPromptFunction } from "./index.js";
+import { ModelPromptFunction, GitRepoInfo } from "./index.js";
 
 export function createModels(
   provider: "anthropic" | "openai" | "together",
@@ -55,11 +55,7 @@ Use the writeTodos tool to provide the list of pending todos needed to complete 
       };
     },
 
-    evaluateProject: async ({ workspacePath, prompt, gitRepoInfo }) => {
-      workspacePath = gitRepoInfo?.repo
-        ? join(workspacePath, gitRepoInfo.repo)
-        : workspacePath;
-
+    evaluateProject: async ({ workspacePath, prompt, repos }) => {
       let systemPrompt = `You are an AI assistant performing project analysis. Your goal is to understand the codebase structure, existing patterns, technologies, and relevant context.
 
 Working directory: ${workspacePath}`;
@@ -71,15 +67,13 @@ ${prompt}
 
 `;
 
-      // Add repository cloning instructions if this is a git repository
-      if (gitRepoInfo?.isGitRepo && gitRepoInfo.fullName) {
-        taskPrompt += `BEFORE analyzing the project, you must:
-1. Clone the repository: git clone https://github.com/${gitRepoInfo.fullName}.git ${gitRepoInfo.repo}
-2. Navigate to the cloned directory: cd ${gitRepoInfo.repo}
-3. Create and checkout a new branch for the user's request: git checkout -b feature/user-request
-4. Then analyze the project structure from within the cloned repository
-
-Use the cloned repository for all analysis commands.
+      // Add repository context if repos are provided
+      if (repos && repos.length > 0) {
+        taskPrompt += `The following repositories have been cloned locally and are available for analysis:\n`;
+        repos.forEach(repo => {
+          taskPrompt += `- ${repo.folderName}/ (${repo.fullName}) on branch ${repo.branchName}\n`;
+        });
+        taskPrompt += `\nNavigate to the appropriate repository directories to analyze the project structure.
 
 `;
       }
@@ -111,7 +105,7 @@ You should ONLY respond with a list of files and folders relevant for the user r
       };
     },
 
-    executeTodo: async ({ workspacePath, todo, todos, projectAnalysis }) => {
+    executeTodo: async ({ workspacePath, todo, todos, projectAnalysis, repos }) => {
       const remainingPendingTodos = todos.filter((t) => t.status === "pending");
       const remainingTodosContext =
         remainingPendingTodos.length > 0
@@ -184,7 +178,17 @@ TESTING AND VERIFICATION:
 - Prefer validation commands like: npm run build, npm run lint, npm run typecheck, npm test, yarn build, etc.
 - Focus primarily on implementing the requested functionality
 
-GIT OPERATIONS: NEVER perform git operations (git add, git commit, git push, git pull, git merge, git rebase, etc.) unless the todo explicitly instructs you to do so. Do not automatically commit changes, stage files, or perform any git-related actions. Only use git commands when specifically requested in the todo description.
+GIT OPERATIONS: After completing implementation work that modifies or creates files, you MUST create a commit for your changes and push them to the remote repository. ${repos && repos.length > 0 ? `
+IMPORTANT: This workspace contains multiple nested repositories. You can only commit changes in the following repository folders:
+${repos.map((repo: GitRepoInfo) => `- ${repo.folderName}: ${repo.remoteUrl}`).join('\n')}
+When making commits, ensure you are in the correct repository folder for the files you are modifying. Never attempt to commit files from one repository while in another repository folder.` : ''}
+
+Follow these steps:
+1. Stage all relevant changes using appropriate git add commands
+2. Create a descriptive commit message that summarizes the work completed
+3. Commit the changes using git commit
+4. Push the changes to the remote repository using git push
+This ensures that all implementation work is properly tracked and shared. Only skip git operations if the todo explicitly instructs you not to commit or if you made no file changes.
 
 IMPORTANT: When you complete your task, always provide a clear summary of what was accomplished, including:
 - A brief description of the actions taken
