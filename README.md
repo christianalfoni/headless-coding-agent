@@ -1,4 +1,4 @@
-# Headless Coding Agent
+# 🚀 Awesome Headless Coding Agent
 
 A headless AI coding agent that autonomously executes development tasks through streaming JSON output. Use any model to plan, implement, and manage complex coding workflows while providing full transparency through structured output.
 
