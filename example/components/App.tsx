@@ -21,7 +21,7 @@ export const App: React.FC<AppProps> = ({
   onPromptSubmit, 
   onSessionDelete 
 }) => {
-  const [currentFocus, setCurrentFocus] = useState<'input' | 'list'>(gitRepos.length > 0 ? 'input' : 'list');
+  const [currentFocus, setCurrentFocus] = useState<'input' | 'list'>('input');
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
   const [viewingSession, setViewingSession] = useState<IPromptSession | null>(null);
   const { exit } = useApp();
@@ -44,11 +44,8 @@ export const App: React.FC<AppProps> = ({
   }, [onPromptSubmit]);
   
   const handleFocusPrevious = useCallback(() => {
-    // Only allow focus on input if there are repos available
-    if (gitRepos.length > 0) {
-      setCurrentFocus('input');
-    }
-  }, [gitRepos.length]);
+    setCurrentFocus('input');
+  }, []);
   
   const handleNavigate = useCallback((direction: 'up' | 'down') => {
     if (direction === 'up' && selectedSessionIndex > 0) {
@@ -104,20 +101,12 @@ export const App: React.FC<AppProps> = ({
       
       {/* Input Field */}
       <Box flexDirection="column">
-        {gitRepos.length === 0 ? (
-          <Box borderStyle="single" borderColor="cyan" marginX={1}>
-            <Box paddingX={1} paddingY={0}>
-              <Text color="gray">Input disabled - no git repositories found</Text>
-            </Box>
-          </Box>
-        ) : (
-          <InputField 
-            onSubmit={handlePromptSubmit} 
-            focusNext={handleFocusNext} 
-            gitRepos={gitRepos}
-            isFocused={currentFocus === 'input'}
-          />
-        )}
+        <InputField 
+          onSubmit={handlePromptSubmit} 
+          focusNext={handleFocusNext} 
+          gitRepos={gitRepos}
+          isFocused={currentFocus === 'input'}
+        />
       </Box>
       
       {/* Sessions List */}
