@@ -21,11 +21,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({ session, onBack }) =
   useInput((inputText, key) => {
     if (key.escape) {
       onBack();
-    } else if (inputText === 'o' && session.vscodeUrl) {
-      // Open VSCode with 'o' key
-      open(session.vscodeUrl).catch((error) => {
-        console.error('Failed to open VSCode URL:', error);
-      });
+    } else if (inputText === 'o') {
+      // VSCode functionality removed - feature not available
     } else if (key.shift && key.upArrow) {
       // Scroll up
       setScrollOffset(prev => Math.max(0, prev - 1));
@@ -44,9 +41,6 @@ export const MessagesView: React.FC<MessagesViewProps> = ({ session, onBack }) =
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>Prompt: {session.prompt}</Text>
         <Text>Status: {session.getStateIcon()} {session.getStateText()}</Text>
-        {session.vscodeUrl && (
-          <Text>🔗 Press 'o' to open VSCode</Text>
-        )}
         <Text color="gray">Press ESC to go back | Shift+↑↓ to scroll</Text>
       </Box>
       

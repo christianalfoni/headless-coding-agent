@@ -565,13 +565,13 @@ class AgentChat {
 
     // Add GitHub token if available
     if (process.env.GITHUB_TOKEN) {
-      requestBody.githubToken = process.env.GITHUB_TOKEN;
+      (requestBody as any).githubToken = process.env.GITHUB_TOKEN;
     }
 
     // Add repository and branch info from session if available
     if (session?.repos && session.repos.length > 0) {
       // Send only the mentioned repos with their associated branch names
-      requestBody.reposWithBranches = session.repos.map((repo) => ({
+      (requestBody as any).reposWithBranches = session.repos.map((repo) => ({
         repoInfo: repo.repoInfo,
         branchName: repo.branchName,
       }));
@@ -916,7 +916,7 @@ class AgentChat {
             }
             this.saveSessions();
           }
-        } catch (pollError) {
+        } catch (pollError: any) {
           console.error("Error polling messages:", pollError.message);
           await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait longer on error
         }
@@ -927,7 +927,7 @@ class AgentChat {
 
       // Save conversation after each agent execution
       this.saveConversation();
-    } catch (error) {
+    } catch (error: any) {
       this.isAgentRunning = false;
       this.currentSession = null;
 

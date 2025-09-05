@@ -1,12 +1,12 @@
 {
-  "name": "headless-coding-agent",
+  "name": "together-tasks",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "coding-agent": "./dist/cli.js"
+    "together-tasks": "./dist/index.js"
   },
   "exports": {
     ".": {
@@ -19,9 +19,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && chmod +x dist/cli.js && rm -rf agent-template/.codesandbox/agent && cp -r dist agent-template/.codesandbox/agent",
-    "dev": "npx tsx src/cli.ts",
-    "example": "npx tsx example/index.tsx",
+    "build": "npm run build:agent && npm run build:cli",
+    "build:agent": "tsc",
+    "build:cli": "tsc -p tsconfig.cli.json && chmod +x dist/index.js",
+    "dev": "npx tsx cli/index.tsx",
     "test": "vitest",
     "test:run": "vitest run"
   },
@@ -64,6 +65,10 @@
     "react": "^19.1.1",
     "together-ai": "^0.22.0",
     "uuid": "^11.1.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "chalk": "^4.1.2",
+    "inquirer": "^9.2.11",
+    "ora": "^5.4.1",
+    "boxen": "^5.1.2"
   }
 }

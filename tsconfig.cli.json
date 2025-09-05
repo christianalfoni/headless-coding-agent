@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./cli",
+    "jsx": "react-jsx",
+    "noImplicitAny": false
+  },
+  "include": ["cli/**/*"],
+  "exclude": ["node_modules", "dist", "agent-template"]
+}

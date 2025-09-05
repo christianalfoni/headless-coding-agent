@@ -118,7 +118,7 @@ export const SessionsList: React.FC<SessionsListProps> = ({
                 console.error(`Failed to open VSCode for ${repo.repoInfo.folderName}:`, error);
               });
               
-            } catch (error) {
+            } catch (error: any) {
               // Show error message for git checkout failure
               console.error(`Failed to checkout branch '${repo.branchName}' in ${repo.repoInfo.folderName}: ${error.message}`);
               console.error('This is typically due to existing uncommitted changes. Please commit or stash your changes first.');
