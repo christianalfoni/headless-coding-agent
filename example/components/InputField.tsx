@@ -29,13 +29,20 @@ export const InputField: React.FC<InputFieldProps> = ({ onSubmit, focusNext, git
     const lastAtIndex = input.lastIndexOf('@');
     if (lastAtIndex !== -1) {
       const textAfterAt = input.substring(lastAtIndex + 1);
-      // Only show if @ is at word boundary, no space after @, AND there's at least one character after @
-      if (!textAfterAt.includes(' ') && textAfterAt.length > 0) {
+      // Show if @ is at word boundary and no space after @
+      if (!textAfterAt.includes(' ')) {
         // Find the best matching repository
-        const matchingRepo = gitRepos.find(repo => 
-          repo.folderName.toLowerCase().includes(textAfterAt.toLowerCase()) ||
-          (repo.fullName && repo.fullName.toLowerCase().includes(textAfterAt.toLowerCase()))
-        );
+        let matchingRepo;
+        if (textAfterAt.length === 0) {
+          // Show first repo immediately when @ is typed with no text after
+          matchingRepo = gitRepos[0] || null;
+        } else {
+          // Find matching repo based on text after @
+          matchingRepo = gitRepos.find(repo => 
+            repo.folderName.toLowerCase().includes(textAfterAt.toLowerCase()) ||
+            (repo.fullName && repo.fullName.toLowerCase().includes(textAfterAt.toLowerCase()))
+          );
+        }
         
         setTopRepo(matchingRepo || null);
         setShowRepoSuggestion(!!matchingRepo);
@@ -51,6 +58,40 @@ export const InputField: React.FC<InputFieldProps> = ({ onSubmit, focusNext, git
   }, [input, gitRepos, isFocused]);
   
   useInput((inputText, key) => {
+    // Debug: Log key events to understand what's being received
+    // console.log('Key event:', { inputText, key, charCode: inputText?.charCodeAt(0) });
+    
+    // Handle Option+Backspace to delete previous word
+    // Based on debug output, Option+Backspace comes through as Ctrl+W
+    if (
+      (key.meta && key.backspace) || 
+      (key.option && key.backspace) ||
+      (key.alt && key.backspace) ||
+      inputText === '\x17' ||  // Ctrl+W
+      inputText === '\x1b\x7f' || // ESC + DEL
+      (inputText && inputText.charCodeAt(0) === 23) || // Another way to detect Ctrl+W
+      (inputText === 'w' && key.ctrl) // Option+Backspace detected as Ctrl+W
+    ) {
+      // Find the position of the last word boundary
+      const trimmedInput = input.trimEnd();
+      let pos = trimmedInput.length - 1;
+      
+      // Skip trailing whitespace
+      while (pos >= 0 && /\s/.test(trimmedInput[pos])) {
+        pos--;
+      }
+      
+      // Skip the current word
+      while (pos >= 0 && !/\s/.test(trimmedInput[pos])) {
+        pos--;
+      }
+      
+      const newInput = input.substring(0, pos + 1);
+      setInput(newInput);
+      setInputKey(prev => prev + 1); // Force remount to position cursor at end
+      return;
+    }
+    
     if (showRepoSuggestion && topRepo) {
       if (key.return) {
         // Insert suggested repo name, keeping the @ symbol
@@ -97,32 +138,35 @@ export const InputField: React.FC<InputFieldProps> = ({ onSubmit, focusNext, git
   };
   
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1}>
-      <Box>
-        {isFocused ? (
-          <>
-            <Text>Prompt: </Text>
-            <TextInput 
-              key={inputKey}
-              value={input} 
-              onChange={handleInputChange}
-              onSubmit={handleSubmit}
-            />
-          </>
-        ) : (
-          <Text color="gray">Prompt: (Press ↑ to focus input)</Text>
-        )}
+    <Box flexDirection="column">
+      {/* Bordered prompt input area */}
+      <Box borderStyle="round" borderColor="cyan" marginX={1}>
+        <Box paddingX={1} paddingY={0}>
+          {isFocused ? (
+            <>
+              <Text>Prompt: </Text>
+              <TextInput 
+                key={inputKey}
+                value={input} 
+                onChange={handleInputChange}
+                onSubmit={handleSubmit}
+              />
+            </>
+          ) : (
+            <Text color="gray">Prompt: (Press ↑ to focus input)</Text>
+          )}
+        </Box>
       </Box>
       
-      {/* Fixed placeholder box to prevent jumping, aligned with Prompt label */}
-      <Box minHeight={1}>
+      {/* Repo suggestion area - outside the border */}
+      <Box paddingX={2} minHeight={1}>
         {isFocused && showRepoSuggestion && topRepo ? (
           <Box>
             <Text color="magenta">@{topRepo.folderName}</Text>
             <Text color="gray"> (Press Enter to select, Space to cancel)</Text>
           </Box>
         ) : (
-          <Text> </Text>
+          <Text color="gray">{gitRepos.length} git repositories found (type @ to select)</Text>
         )}
       </Box>
     </Box>

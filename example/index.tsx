@@ -519,7 +519,7 @@ class AgentChat {
 
       const sdk = new CodeSandbox(apiKey);
       this.sandbox = await sdk.sandboxes.create({
-        id: "pt_Ut2ZwN8ffdA4BykeQw5DuZ", // Template ID
+        id: "pt_FwkC47DP7M23Surs1rFEf1", // Template ID
       });
 
       this.client = await this.sandbox.connect();

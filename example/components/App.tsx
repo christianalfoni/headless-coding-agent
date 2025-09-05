@@ -94,23 +94,21 @@ export const App: React.FC<AppProps> = ({
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
       {/* Header */}
-      <Box paddingX={1} paddingY={1} marginBottom={1}>
+      <Box paddingX={1}>
         <Box flexDirection="column">
-          <Text bold>🤖 Headless Agent Chat Interface</Text>
-          <Text>🏗️  Using CodeSandbox</Text>
-          {gitRepos && gitRepos.length > 0 ? (
-            <Text>📂 {gitRepos.length} git repositories found (type @ to select)</Text>
-          ) : (
+          {gitRepos && gitRepos.length === 0 && (
             <Text color="red">⚠️  No git repositories found - at least one repo is required</Text>
           )}
         </Box>
       </Box>
       
       {/* Input Field */}
-      <Box marginBottom={1}>
+      <Box flexDirection="column">
         {gitRepos.length === 0 ? (
-          <Box paddingX={1} paddingY={1}>
-            <Text color="gray">Input disabled - no git repositories found</Text>
+          <Box borderStyle="single" borderColor="cyan" marginX={1}>
+            <Box paddingX={1} paddingY={0}>
+              <Text color="gray">Input disabled - no git repositories found</Text>
+            </Box>
           </Box>
         ) : (
           <InputField 
@@ -123,7 +121,7 @@ export const App: React.FC<AppProps> = ({
       </Box>
       
       {/* Sessions List */}
-      <Box paddingX={1} marginBottom={1}>
+      <Box paddingX={1} marginTop={1}>
         <Text bold color="cyan">Recent Prompts:</Text>
       </Box>
       <SessionsList

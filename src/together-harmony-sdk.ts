@@ -2,16 +2,11 @@ import fs from "fs";
 import { load_harmony_encoding, Message, Role } from "openai-harmony";
 
 // Delete agent.log file when module loads
-const logPath = "../agent.log";
-console.log(
-  `Together Harmony SDK: agent.log path will be: ${process.cwd()}/${logPath}`
-);
+const logPath = "agent.log";
 try {
   fs.unlinkSync(logPath);
-  console.log(`Together Harmony SDK: Deleted existing agent.log`);
 } catch (error) {
   // File doesn't exist or can't be deleted, that's okay
-  console.log(`Together Harmony SDK: No existing agent.log to delete`);
 }
 
 // Remove SimpleMessage interface - using Message from openai-harmony instead
@@ -45,8 +40,7 @@ export function convertJsonSchemaToHarmonyTypeScript(tools: Tool[]): string {
   }
 
   const convertProperty = (
-    prop: JsonSchemaProperty,
-    isRequired: boolean = false
+    prop: JsonSchemaProperty
   ): string => {
     let type = "";
 
@@ -67,7 +61,7 @@ export function convertJsonSchemaToHarmonyTypeScript(tools: Tool[]): string {
         break;
       case "array":
         if (prop.items) {
-          const itemType = convertProperty(prop.items, true);
+          const itemType = convertProperty(prop.items);
           type = `${itemType}[]`;
         } else {
           type = "any[]";
@@ -83,8 +77,7 @@ export function convertJsonSchemaToHarmonyTypeScript(tools: Tool[]): string {
                 ? `    // ${value.description}\n`
                 : "";
               return `${comment}    ${key}${optional}: ${convertProperty(
-                value,
-                required
+                value
               )}`;
             })
             .join(",\n");
@@ -120,8 +113,7 @@ export function convertJsonSchemaToHarmonyTypeScript(tools: Tool[]): string {
             ? `    // ${prop.description}\n`
             : "";
           return `${propComment}    ${key}${optional}: ${convertProperty(
-            prop,
-            isRequired
+            prop
           )}`;
         })
         .join(",\n");
@@ -143,14 +135,21 @@ interface RawParsedMessage {
 }
 
 // Convert raw parsed messages to proper Message format
+// Ensures all harmony channels (analysis, commentary, final) and tags are properly handled
 function convertRawMessagesToMessages(rawMessages: RawParsedMessage[]): Message[] {
-  return rawMessages.map(raw => ({
-    role: raw.role as Role,
-    content: [{ type: "text" as const, text: raw.content }],
-    channel: raw.channel,
-    recipient: raw.recipient,
-    name: raw.name
-  }));
+  return rawMessages.map(raw => {
+    const message: Message = {
+      role: raw.role as Role,
+      content: [{ type: "text" as const, text: raw.content }]
+    };
+    
+    // Preserve all harmony metadata
+    if (raw.channel) message.channel = raw.channel;
+    if (raw.recipient) message.recipient = raw.recipient; 
+    if (raw.name) message.name = raw.name;
+    
+    return message;
+  });
 }
 
 export async function prompt(config: {
@@ -160,15 +159,6 @@ export async function prompt(config: {
   apiKey: string;
 }): Promise<{ messages: Message[]; inputTokens: number; outputTokens: number }> {
   try {
-    // Log function entry
-    fs.appendFileSync(
-      logPath,
-      `=== HARMONY SDK CALLED ===\nMessages: ${
-        config.messages.length
-      }, Tools: ${config.tools?.length || 0}, Reasoning: ${
-        config.reasoningEffort || "none"
-      }\n==========================\n\n`
-    );
     // 1. Load harmony encoding
     const encoding = await load_harmony_encoding("HarmonyGptOss");
 
@@ -209,25 +199,6 @@ export async function prompt(config: {
     // 6. Convert tokens to string for the API
     const promptText = encoding.decodeUtf8(inputTokensArray);
 
-    // Log the actual tokens to agent.log
-    try {
-      fs.appendFileSync(
-        logPath,
-        `=== PROMPT TOKENS ===\n${promptText}\n\n=====================\n\n`
-      );
-    } catch (error) {
-      // Ignore file write errors
-    }
-
-    // Log the API call
-    fs.appendFileSync(
-      logPath,
-      `=== API CALL ===\nParams: ${JSON.stringify(
-        promptText,
-        null,
-        2
-      )}\n================\n\n`
-    );
 
     const response = await fetch(
       "https://api.fireworks.ai/inference/v1/completions",
@@ -253,15 +224,6 @@ export async function prompt(config: {
 
     const completion = await response.json();
 
-    // Log the API response
-    fs.appendFileSync(
-      logPath,
-      `=== API RESPONSE ===\n${JSON.stringify(
-        completion,
-        null,
-        2
-      )}\n====================\n\n`
-    );
 
     // 8. Extract completion content and usage from response
     const completionContent = completion.choices[0].text;
@@ -275,15 +237,11 @@ export async function prompt(config: {
     // 9. Parse harmony response using openai-harmony  
     let parsedMessages: Message[];
 
-    // Build the full conversation by concatenating prompt + completion
     // Fix incomplete harmony responses by ensuring they end with <|end|>
     let fixedCompletionContent = completionContent;
     if (!completionContent.trim().endsWith("<|end|>")) {
       fixedCompletionContent = completionContent + "<|end|>";
     }
-    const fullConversation = promptText + fixedCompletionContent;
-
-    // Remove the full conversation logging - too verbose
 
     try {
       // Use the original input tokens + encode just the completion
@@ -299,37 +257,15 @@ export async function prompt(config: {
       fullTokens.set(inputTokensArray, 0);
       fullTokens.set(completionTokens, inputTokensArray.length);
 
-      // Log token info for debugging
-      fs.appendFileSync(
-        logPath,
-        `=== TOKEN INFO ===\nInput tokens: ${
-          inputTokensArray.length
-        }, Completion tokens: ${completionTokens.length}, Total: ${
-          fullTokens.length
-        }\nFirst few input tokens: ${Array.from(
-          inputTokensArray.slice(0, 5)
-        )}\nFirst few completion tokens: ${Array.from(
-          completionTokens.slice(0, 5)
-        )}\n==================\n\n`
-      );
 
       // Parse the complete conversation tokens as messages
       const parsedResult =
         encoding.parseMessagesFromCompletionTokens(fullTokens);
       
-      // Log the raw parsed result before JSON parsing
-      fs.appendFileSync(
-        logPath,
-        `=== RAW PARSED RESULT ===\n${parsedResult}\n=========================\n\n`
-      );
       
       const rawParsedMessages = JSON.parse(parsedResult) as RawParsedMessage[];
       parsedMessages = convertRawMessagesToMessages(rawParsedMessages);
     } catch (error) {
-      fs.appendFileSync(
-        logPath,
-        `=== PARSING ERROR ===\n${error}\n======================\n\n`
-      );
       throw error;
     }
 
@@ -345,24 +281,42 @@ export async function prompt(config: {
     // Process only the NEW assistant messages from the response
     const newMessages = parsedMessages.slice(originalMessageCount);
 
-    // Debug: Log the new messages structure
+
+    // Log comprehensive harmony response analysis
+    const responseAnalysis = {
+      timestamp: new Date().toISOString(),
+      totalNewMessages: newMessages.length,
+      messagesByChannel: newMessages.reduce((acc, msg) => {
+        const channel = msg.channel || 'no-channel';
+        acc[channel] = (acc[channel] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      messagesByRole: newMessages.reduce((acc, msg) => {
+        acc[msg.role] = (acc[msg.role] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      allMessages: newMessages.map(msg => {
+        const firstContent = msg.content[0];
+        const text = firstContent && 'text' in firstContent ? firstContent.text : JSON.stringify(firstContent);
+        return {
+          role: msg.role,
+          channel: msg.channel,
+          recipient: msg.recipient,
+          name: msg.name,
+          contentPreview: text?.substring(0, 100) + (text && text.length > 100 ? '...' : ''),
+          fullContent: text
+        };
+      })
+    };
+    
     fs.appendFileSync(
       logPath,
-      `=== NEW MESSAGES DEBUG ===\nOriginal message count: ${originalMessageCount}\nTotal parsed messages: ${parsedMessages.length}\nNew messages: ${JSON.stringify(newMessages, null, 2)}\n==========================\n\n`
+      `=== HARMONY RESPONSE ===\n${JSON.stringify(responseAnalysis, null, 2)}\n========================\n\n`
     );
 
     // Return all new messages (no role filtering needed)
-    const result = { messages: newMessages, inputTokens, outputTokens };
-    
-    // Log the final result we're returning
-    fs.appendFileSync(
-      logPath,
-      `=== FINAL RESULT ===\n${JSON.stringify(result, null, 2)}\n====================\n\n`
-    );
-    
-    return result;
+    return { messages: newMessages, inputTokens, outputTokens };
   } catch (error) {
-    console.error("Error in together-harmony SDK:", error);
     throw error;
   }
 }
